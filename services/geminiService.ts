@@ -1,14 +1,11 @@
 import { GoogleGenAI } from "@google/genai";
-import { BookingSummary, ServiceCategory } from "../types";
+import { BookingSummary } from "../types";
 
-// Note: In a real app, never expose API keys on the client. 
-// This is for demonstration purposes as per the prompt instructions using process.env.API_KEY
-const apiKey = process.env.API_KEY || ''; 
-
-const ai = new GoogleGenAI({ apiKey });
+// Always use named parameter and process.env.API_KEY directly
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 export const generateEventPlan = async (booking: BookingSummary): Promise<string> => {
-  if (!apiKey) return "請設定 API Key 以啟用 AI 助理功能。";
+  if (!process.env.API_KEY) return "請設定 API Key 以啟用 AI 助理功能。";
 
   const servicesList = booking.selections
     .map(s => {
@@ -40,10 +37,12 @@ export const generateEventPlan = async (booking: BookingSummary): Promise<string
   `;
 
   try {
+    // Correct method: Use gemini-3-flash-preview for basic text tasks
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3-flash-preview',
       contents: prompt,
     });
+    // Correct extraction: Direct property access
     return response.text || "無法生成建議。";
   } catch (error) {
     console.error("Gemini API Error:", error);

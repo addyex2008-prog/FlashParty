@@ -8,10 +8,8 @@ export enum ServiceCategory {
   PERFORMER = '表演者',
   STAFF = '服務人員',
   DECOR = '場地佈置',
-  // Merged Category: Lighting + Audio + Truss
   STAGE_HARDWARE = '舞台/音響/燈光',
   FLORIST = '花藝',
-  // Merged Category: Print + Backdrop
   DESIGN_PRINT = '設計/背板輸出',
   LION_DANCE = '舞龍舞獅',
   OTHER = '其他周邊',
@@ -26,7 +24,8 @@ export enum ServiceCategory {
   STATIC_PHOTO = '靜態攝影',
   VIDEOGRAPHY = '影片製做',
   PLANNER = '活動統籌師',
-  PT = '鐘點PT人員'
+  PT = 'PT人員',
+  MAGICIAN = '魔術師'
 }
 
 export enum EventType {
@@ -53,54 +52,99 @@ export enum EventType {
   PRESS_CONFERENCE = '記者會'
 }
 
+export enum DevRank {
+  BRONZE = '銅',
+  SILVER = '銀',
+  GOLD = '金',
+  DIAMOND = '鑽石',
+  METEORITE = '隕石',
+  COSMIC_GEM = '宇宙寶石'
+}
+
+export interface DevelopedVendorInfo {
+  vendorId: string;
+  joinDate: string;
+}
+
+export interface DeveloperPartner {
+  id: string;
+  account: string;
+  name: string;
+  nickname: string;
+  email: string;
+  phone: string;
+  address: string;
+  birthday: string;
+  avatarUrl: string;
+  rank: DevRank;
+  referralCode: string;
+  performance: {
+    totalVendors: number;
+    monthlyVendors: number;
+    nextRankThreshold: number;
+    monthlyMatchBonus: number;
+    monthlyDevBonus: number;
+    monthlyReferralBonus: number;
+  };
+  developedVendors: DevelopedVendorInfo[]; 
+}
+
 export interface Review {
   id: string;
   user: string;
-  rating: number; // 1-5
+  rating: number;
   comment: string;
   date: string;
-  images?: string[]; // Optional images for review
+  images?: string[];
 }
 
-// --- New Interfaces for Complex Pricing ---
+export interface PackageItem {
+  id: string;
+  name: string;
+  quantity: number;
+  imageUrl: string;
+}
 
 export interface VendorPackage {
   id: string;
-  name: string; // e.g. "Birthday Plan A"
+  name: string;
   description: string;
   price: number;
+  soldCount?: number;
   imageUrls: string[];
   videoUrl?: string;
   eventTypes?: EventType[];
+  includedItems?: PackageItem[];
 }
 
 export interface LocationFeeRule {
     city: string;
-    district: string; // 'all' or specific district name
-    setupFee: number;
-    teardownFee: number;
-    deliveryFee: number; // New: Delivery fee per location
+    district: string;
+    minSpend: number; // 低消
+    setupFee: number; // 佈置費
+    teardownFee: number; // 撤場費
+    deliveryFee: number; // 外送費
+}
+
+export interface SpecialDateRule {
+    date: string; // YYYY-MM-DD
+    multiplier: number; // e.g. 1.2 for 20% surcharge
+    note?: string;
 }
 
 export interface DecoratorSettings {
   locationFeeRules: LocationFeeRule[]; 
-  upstairsFee: number; // New: Surcharge for floors other than 1F
-  
-  // Time Surcharges
-  hourlySurcharges: Record<number, number>; // Key: 0-23, Value: Fee
-  
-  // Holiday Surcharges
-  holidaySurchargePercent: number; // e.g. 10 for 10%
-  holidays: string[]; // "MM-DD" format (Solar)
-  lunarHolidays: string[]; // Enum keys: 'CNY', 'CNY_EVE', 'CHINESE_VALENTINES'
-  
-  urgentOrderEnabled: boolean; // 20% surcharge cap 1500
+  upstairsFee: number;
+  urgentOrderFee: number;
+  urgentOrderEnabled: boolean;
+  hourlySurcharges: Record<number, number>; // Hour (0-23) -> Extra Fee
+  specialDateModifiers: SpecialDateRule[];
 }
 
 export interface HostSettings {
-  baseDuration: number; // e.g. 4 hours
-  overtimeRate: number; // Fee per hour after baseDuration
-  eventTypeAddons: Record<string, number>; // Key: EventType, Value: Surcharge amount
+  baseDuration: number;
+  overtimeRate: number;
+  eventTypeAddons: Record<string, number>;
 }
 
 export interface Vendor {
@@ -108,36 +152,20 @@ export interface Vendor {
   name: string;
   category: ServiceCategory;
   description: string;
-  imageUrl: string; // Avatar
-  portfolio: string[]; // List of image URLs
-  portfolioVideos?: string[]; // List of video URLs
+  imageUrl: string;
+  portfolio: string[];
+  portfolioVideos?: string[];
   websiteUrl?: string;
-  
-  // Pricing
-  rate: number; // Base rate (Hourly for Band, Fixed for Venue, Session for Host if hostSettings exist)
+  rate: number;
   rateType: 'hourly' | 'fixed' | 'package'; 
   overtimeRate?: number;
-  
-  // For Host/Photographer/Band: Travel Fees by location
-  travelFees: Record<string, number>; // Key: City, Value: Add-on Cost
-
-  // For Decorators: Packages and Complex Rules
+  travelFees: Record<string, number>;
   packages: VendorPackage[];
   decoratorSettings?: DecoratorSettings;
-  
-  // For Hosts: Specific Pricing Rules
   hostSettings?: HostSettings;
-  
-  // Locations
-  serviceAreas: string[]; // List of Cities (e.g., "台北市", "台中市")
-
-  // Availability: Key = "YYYY-MM-DD", Value = array of hour strings "14:00"
+  serviceAreas: string[];
   availableHours: Record<string, string[]>; 
-  
-  // Status
-  isPaused: boolean; // Global pause for availability
-
-  // Ratings
+  isPaused: boolean;
   rating: number;
   reviewCount: number;
   reviews: Review[];
@@ -146,42 +174,60 @@ export interface Vendor {
 export interface UserRequest {
   name: string;
   phone: string;
-  
-  // Date & Time
-  date: string; // YYYY-MM-DD
-  startTime: string; // HH:mm
-  endTime: string; // HH:mm
-  
-  // Location Breakdown
-  isLocationUndecided: boolean; // New: "Recommendation" mode
+  date: string;
+  startTime: string;
+  endTime: string;
+  isLocationUndecided: boolean;
   city: string;
   district: string;
-  address: string; // Added: Specific address
-  
-  // Type
+  venueName: string;
+  address: string;
   eventType: EventType | '';
 }
 
 export interface SelectedService {
   category: ServiceCategory;
   vendorId: string | null;
-  packageId?: string; // If selected a package
+  packageId?: string;
+  status?: 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'COMPLETED'; 
   options?: {
-    needSetup?: boolean; // Deprecated in favor of deliveryMethod but kept for compatibility
-    needTeardown?: boolean;
-    setupStartTime?: string;
-    setupEndTime?: string;
-    duration?: number; // Override duration
+    // General
+    duration?: number;
     serviceStartTime?: string;
     serviceEndTime?: string;
-    floor?: string; // e.g. "1F", "2F", "B1"
-    deliveryMethod?: 'pickup' | 'delivery' | 'setup'; // New: Mutually exclusive modes
+    
+    // Decorator Specific
+    deliveryMethod?: 'pickup' | 'delivery' | 'setup';
+    pickupTime?: string; // HH:mm
+    needTeardown?: boolean;
+    needUpstairs?: boolean;
+    
+    // Setup logic
+    setupStartTime?: string;
+    setupEndTime?: string;
+    floor?: string;
   };
+}
+
+export interface Discount {
+  code: string;
+  multiplier: number; // e.g. 0.8 for 20% off
+  expiry: string;
+  used: boolean;
 }
 
 export interface BookingSummary {
   userRequest: UserRequest;
   selections: SelectedService[];
   totalCost: number;
+  discountApplied?: number;
+  discountCode?: string;
   durationHours: number;
+}
+
+export interface Order extends BookingSummary {
+  id: string;
+  status: 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'COMPLETED';
+  createdAt: string;
+  aiPlan?: string;
 }

@@ -1,824 +1,843 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { MOCK_VENDORS, calculateVendorCost, calculateVendorCostBreakdown, isVendorAvailable, TAIWAN_LOCATIONS, EVENT_TYPE_RECOMMENDATIONS, resetVendorsForTesting } from '../services/mockData';
-import { Vendor, ServiceCategory, UserRequest, SelectedService, EventType, VendorPackage } from '../types';
+import { MOCK_VENDORS, calculateVendorCost, calculateVendorCostBreakdown, isVendorAvailable, TAIWAN_LOCATIONS, EVENT_TYPE_RECOMMENDATIONS, resetVendorsForTesting, MOCK_ORDERS, randomlyEnableVendors, MOCK_DISCOUNTS } from '../services/mockData';
+import { Vendor, ServiceCategory, UserRequest, SelectedService, EventType, VendorPackage, Order, Discount } from '../types';
 import { generateEventPlan } from '../services/geminiService';
 import VendorDetailModal from './VendorDetailModal';
 
+// Category Icons Mapping
+const CATEGORY_ICONS: Record<ServiceCategory, React.ReactNode> = {
+  [ServiceCategory.PLANNER]: <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>,
+  [ServiceCategory.HOST]: <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m8 0h-3m-3-8V5a3 3 0 116 0v6a3 3 0 01-6 0z" /></svg>,
+  [ServiceCategory.PHOTOGRAPHER]: <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><circle cx="12" cy="13" r="3" /></svg>,
+  [ServiceCategory.BAND]: <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2z" /></svg>,
+  [ServiceCategory.SINGER]: <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4" /><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" /></svg>,
+  [ServiceCategory.DJ]: <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><circle cx="8" cy="12" r="4" /><circle cx="16" cy="12" r="4" /><path d="M8 12h8" /></svg>,
+  [ServiceCategory.MAGICIAN]: <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M19 11l-7-7-7 7m14 0v8a2 2 0 01-2 2H7a2 2 0 01-2-2v-8m14 0h-2m-2 0h-5m-4 0H3" /></svg>,
+  [ServiceCategory.LION_DANCE]: <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>,
+  [ServiceCategory.BALLOON]: <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><circle cx="12" cy="8" r="6" /><path d="M12 14v7" /></svg>,
+  [ServiceCategory.PT]: <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 2m6-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
+  [ServiceCategory.PERFORMER]: <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path d="M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0" /><path d="M9 10l.01 0" /><path d="M15 10l.01 0" /><path d="M9.5 15a3.5 3.5 0 0 0 5 0" /></svg>,
+  [ServiceCategory.ACTOR]: <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /><path d="M9 10h.01M15 10h.01M9.5 15.5c.667.667 1.5 1 2.5 1s1.833-.333 2.5-1" /></svg>,
+  [ServiceCategory.ACROBATICS]: <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path d="M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0" /><path d="M12 7v5l3 3" /></svg>,
+  [ServiceCategory.DANCE]: <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path d="M13 5v14l-4-4H5V9h4l4-4z" /></svg>,
+  [ServiceCategory.DYNAMIC_PHOTO]: <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>,
+  [ServiceCategory.STATIC_PHOTO]: <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><rect x="3" y="4" width="18" height="16" rx="2" /><circle cx="12" cy="12" r="3" /></svg>,
+  [ServiceCategory.VIDEOGRAPHY]: <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>,
+  [ServiceCategory.DECOR]: <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-7.714 2.143L11 21l-2.286-6.857L1 12l7.714-2.143L11 3z" /></svg>,
+  [ServiceCategory.VENUE_RENTAL]: <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5" /></svg>,
+  [ServiceCategory.CATERING]: <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" /></svg>,
+  [ServiceCategory.STAGE_HARDWARE]: <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" /></svg>,
+  [ServiceCategory.CAKE]: <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path d="M21 15.546c-.523 0-1.046.151-1.5.454a2.704 2.704 0 01-3 0 2.703 2.703 0 01-3 0 2.703 2.703 0 01-3 0 2.704 2.704 0 01-1.5-.454V6.454C3.454 6.151 3.977 6 4.5 6s1.046.151 1.5.454a2.704 2.704 0 013 0 2.703 2.703 0 013 0 2.703 2.703 0 013 0 2.704 2.704 0 011.5-.454v9.092z" /></svg>,
+  [ServiceCategory.FLORIST]: <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13" /></svg>,
+  [ServiceCategory.DESIGN_PRINT]: <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>,
+  [ServiceCategory.STAFF]: <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>,
+  [ServiceCategory.OTHER]: <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path d="M5 12h.01M12 12h.01M19 12h.01M6 12a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0z" /></svg>,
+};
+
 // Toast Component
 const Toast = ({ message, onClose }: { message: string; onClose: () => void }) => (
-  <div className="fixed top-20 right-5 z-[999] animate-fade-in">
-    <div className="bg-red-600 text-white px-6 py-4 rounded-lg shadow-[0_0_20px_rgba(220,38,38,0.5)] flex items-center gap-3 border border-red-400">
-      <div className="bg-white text-red-600 rounded-full w-6 h-6 flex items-center justify-center font-bold">!</div>
-      <span className="font-bold tracking-wide">{message}</span>
-      <button onClick={onClose} className="ml-4 text-red-200 hover:text-white">✕</button>
+  <div className="fixed top-20 right-5 left-5 md:left-auto z-[999] animate-fade-in">
+    <div className="bg-[#f46011]/90 text-white px-8 py-5 rounded-xl shadow-[0_0_20px_rgba(244,96,17,0.5)] flex items-center gap-4 border border-[#f46011]/50 justify-between md:justify-start">
+      <div className="flex items-center gap-3">
+        <div className="bg-white text-[#f46011] rounded-full w-8 h-8 flex shrink-0 items-center justify-center font-bold text-lg">!</div>
+        <span className="font-bold tracking-wide text-base md:text-lg">{message}</span>
+      </div>
+      <button onClick={onClose} className="ml-4 text-orange-200 hover:text-white shrink-0 text-xl">✕</button>
     </div>
   </div>
 );
 
-// Group definitions for Step 2
 const SERVICE_GROUPS = [
   {
     label: '軟體服務 (Software)',
-    color: 'text-rose-400',
-    borderColor: 'border-rose-500',
-    icon: '🎭',
+    color: 'text-primary',
     items: [
-      ServiceCategory.PLANNER, // Updated Name: 活動統籌師
-      ServiceCategory.HOST,
-      ServiceCategory.ACTOR, 
-      ServiceCategory.BAND,
-      ServiceCategory.SINGER,
-      ServiceCategory.DJ,
-      ServiceCategory.DANCE,
-      ServiceCategory.BALLOON,
-      ServiceCategory.ACROBATICS,
-      ServiceCategory.LION_DANCE,
-      ServiceCategory.PHOTOGRAPHER,
-      ServiceCategory.STATIC_PHOTO,
-      ServiceCategory.DYNAMIC_PHOTO,
-      ServiceCategory.VIDEOGRAPHY,
+      ServiceCategory.PLANNER, 
+      ServiceCategory.HOST, 
+      ServiceCategory.PHOTOGRAPHER, 
+      ServiceCategory.BAND, 
+      ServiceCategory.SINGER, 
+      ServiceCategory.DJ, 
+      ServiceCategory.MAGICIAN, 
+      ServiceCategory.LION_DANCE, 
+      ServiceCategory.BALLOON, 
       ServiceCategory.PT,
       ServiceCategory.PERFORMER,
-      ServiceCategory.STAFF
+      ServiceCategory.ACTOR,
+      ServiceCategory.ACROBATICS,
+      ServiceCategory.DANCE
     ]
   },
   {
     label: '硬體服務 (Hardware)',
-    color: 'text-indigo-400',
-    borderColor: 'border-indigo-500',
-    icon: '🛠️',
+    color: 'text-orange-300',
     items: [
-      ServiceCategory.DECOR,
-      ServiceCategory.VENUE_RENTAL,
-      ServiceCategory.FLORIST,
-      ServiceCategory.STAGE_HARDWARE, // Merged: AV, Lighting, Truss
-      ServiceCategory.DESIGN_PRINT, // Merged: Print, Backdrop
-      ServiceCategory.CAKE,
-      ServiceCategory.CATERING, // Added
-      ServiceCategory.OTHER
+      ServiceCategory.DECOR, 
+      ServiceCategory.VENUE_RENTAL, 
+      ServiceCategory.CATERING, 
+      ServiceCategory.STAGE_HARDWARE, 
+      ServiceCategory.CAKE, 
+      ServiceCategory.FLORIST, 
+      ServiceCategory.DESIGN_PRINT, 
+      ServiceCategory.STAFF
     ]
   }
 ];
 
-const categories = Object.values(ServiceCategory);
 const eventTypes = Object.values(EventType);
+
+// Decor Config Modal
+const DecorConfigModal = ({ 
+    visible, 
+    onClose, 
+    onConfirm, 
+    vendor, 
+    pkg,
+    eventDate 
+}: { 
+    visible: boolean; 
+    onClose: () => void; 
+    onConfirm: (options: any) => void;
+    vendor: Vendor | null;
+    pkg: VendorPackage | null;
+    eventDate: string;
+}) => {
+    const [deliveryMethod, setDeliveryMethod] = useState<'pickup' | 'delivery' | 'setup'>('setup');
+    const [pickupTime, setPickupTime] = useState('10:00');
+    const [needTeardown, setNeedTeardown] = useState(false);
+    const [needUpstairs, setNeedUpstairs] = useState(false);
+    
+    if (!visible || !vendor) return null;
+
+    const basePrice = pkg ? pkg.price : vendor.rate;
+    const isSetupAllowed = basePrice >= 5000;
+
+    const handleConfirm = () => {
+        if (deliveryMethod === 'setup' && !isSetupAllowed) {
+            alert('專人到府佈置低消需滿 $5000 以上，請選擇其他方式或升級方案。');
+            return;
+        }
+        onConfirm({
+            deliveryMethod,
+            pickupTime,
+            needTeardown,
+            needUpstairs: deliveryMethod === 'delivery' ? needUpstairs : false,
+        });
+    };
+
+    return (
+        <div className="fixed inset-0 z-[300] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/90 backdrop-blur-md" onClick={onClose}></div>
+            <div className="relative bg-[#0a0a0a] border border-white/10 rounded-[32px] p-8 w-full max-w-lg shadow-[0_0_50px_rgba(244,96,17,0.2)] animate-fade-in-up">
+                <div className="flex justify-between items-center mb-6">
+                    <h3 className="text-2xl font-black text-white flex items-center">
+                        <span className="w-1.5 h-8 bg-primary mr-4 rounded-full"></span>
+                        場地佈置 - 配送服務設定
+                    </h3>
+                    <button onClick={onClose} className="text-slate-500 hover:text-white text-xl">✕</button>
+                </div>
+
+                <div className="space-y-8">
+                    {/* Method */}
+                    <div className="bg-white/5 p-6 rounded-3xl border border-white/5">
+                        <label className="text-sm text-slate-500 font-black uppercase mb-4 block">取貨/服務方式</label>
+                        <div className="grid grid-cols-3 gap-4">
+                            <button 
+                                onClick={() => setDeliveryMethod('pickup')} 
+                                className={`py-4 rounded-2xl text-sm font-bold transition-all border ${deliveryMethod === 'pickup' ? 'bg-primary text-white border-primary shadow-lg' : 'bg-black/20 text-slate-400 border-white/10 hover:border-white/30'}`}
+                            >
+                                自取 (免運)
+                            </button>
+                            <button 
+                                onClick={() => setDeliveryMethod('delivery')} 
+                                className={`py-4 rounded-2xl text-sm font-bold transition-all border ${deliveryMethod === 'delivery' ? 'bg-primary text-white border-primary shadow-lg' : 'bg-black/20 text-slate-400 border-white/10 hover:border-white/30'}`}
+                            >
+                                純外送
+                            </button>
+                            <button 
+                                onClick={() => setDeliveryMethod('setup')} 
+                                className={`py-4 rounded-2xl text-sm font-bold transition-all border relative ${deliveryMethod === 'setup' ? 'bg-primary text-white border-primary shadow-lg' : 'bg-black/20 text-slate-400 border-white/10 hover:border-white/30'} ${!isSetupAllowed ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                disabled={!isSetupAllowed}
+                            >
+                                專人佈置
+                                {!isSetupAllowed && <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] px-2 py-0.5 rounded-full font-bold">低消5000</span>}
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Time */}
+                    <div className="bg-white/5 p-6 rounded-3xl border border-white/5">
+                        <label className="text-sm text-slate-500 font-black uppercase mb-4 block">預計取貨/進場時間</label>
+                        <div className="flex gap-4 items-center">
+                            <div className="bg-black/20 px-6 py-4 rounded-2xl text-slate-300 font-bold border border-white/10 flex-1 text-center text-lg">
+                                {eventDate}
+                            </div>
+                            <input 
+                                type="time" 
+                                value={pickupTime} 
+                                onChange={(e) => setPickupTime(e.target.value)}
+                                className="bg-black/20 px-6 py-4 rounded-2xl text-white font-bold border border-white/10 outline-none focus:border-primary flex-1 text-center text-lg"
+                            />
+                        </div>
+                        <p className="text-xs text-slate-500 mt-3 text-center font-bold">若為專人佈置，此為廠商進場佈置時間</p>
+                    </div>
+
+                    {/* Options */}
+                    <div className="grid grid-cols-2 gap-6">
+                        <div className={`p-6 rounded-3xl border transition-all ${deliveryMethod === 'pickup' ? 'opacity-30 pointer-events-none border-white/5' : 'bg-white/5 border-white/5'}`}>
+                            <label className="flex items-center justify-between cursor-pointer">
+                                <span className="text-base font-bold text-white">是否需撤場?</span>
+                                <input 
+                                    type="checkbox" 
+                                    checked={needTeardown} 
+                                    onChange={(e) => setNeedTeardown(e.target.checked)}
+                                    className="accent-primary w-6 h-6"
+                                />
+                            </label>
+                            <p className="text-xs text-slate-500 mt-2 font-bold">活動結束後專人前往回收道具</p>
+                        </div>
+
+                        <div className={`p-6 rounded-3xl border transition-all ${deliveryMethod === 'delivery' ? 'bg-white/5 border-white/5' : 'opacity-30 pointer-events-none border-white/5'}`}>
+                            <label className="flex items-center justify-between cursor-pointer">
+                                <span className="text-base font-bold text-white">是否需上樓?</span>
+                                <input 
+                                    type="checkbox" 
+                                    checked={needUpstairs} 
+                                    onChange={(e) => setNeedUpstairs(e.target.checked)}
+                                    className="accent-primary w-6 h-6"
+                                />
+                            </label>
+                            <p className="text-xs text-slate-500 mt-2 font-bold">僅限無電梯公寓或特殊搬運需求</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="mt-10 pt-8 border-t border-white/10">
+                    <button onClick={handleConfirm} className="w-full py-5 bg-primary text-white rounded-2xl font-black text-lg uppercase tracking-widest shadow-lg hover:bg-[#d9520e] transition-all">
+                        確認配送細節
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 interface ClientWizardProps {
   onBack: () => void;
+  onGoToMemberCenter?: () => void;
 }
 
-const ClientWizard: React.FC<ClientWizardProps> = ({ onBack }) => {
+const ClientWizard: React.FC<ClientWizardProps> = ({ onBack, onGoToMemberCenter }) => {
   const [step, setStep] = useState(1);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [highlightErrors, setHighlightErrors] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isAiLoading, setIsAiLoading] = useState(false);
+  const [activeDetailVendor, setActiveDetailVendor] = useState<Vendor | null>(null);
+  const [selectedOrderVendor, setSelectedOrderVendor] = useState<{order: Order, selection: SelectedService} | null>(null);
   
-  // Form State
+  // Pending decoration config state
+  const [pendingDecorSelection, setPendingDecorSelection] = useState<{vendorId: string, packageId?: string} | null>(null);
+
+  // Discount state
+  const [discountCodeInput, setDiscountCodeInput] = useState('');
+  const [appliedDiscount, setAppliedDiscount] = useState<Discount | null>(null);
+
   const [request, setRequest] = useState<UserRequest>({
-    name: '',
-    phone: '',
-    date: '',
-    startTime: '14:00',
-    endTime: '18:00',
-    isLocationUndecided: false, // Now means "Address Undecided"
-    city: '',
-    district: '',
-    address: '',
-    eventType: '',
+    name: '', phone: '', date: '', startTime: '14:00', endTime: '18:00',
+    isLocationUndecided: false, city: '', district: '', venueName: '', address: '', eventType: '',
   });
 
   const [neededServices, setNeededServices] = useState<ServiceCategory[]>([]);
   const [selectedVendors, setSelectedVendors] = useState<SelectedService[]>([]);
   const [aiPlan, setAiPlan] = useState<string>('');
-  const [isLoadingAi, setIsLoadingAi] = useState(false);
-  const [viewingVendor, setViewingVendor] = useState<Vendor | null>(null);
 
   const availableDistricts = request.city ? TAIWAN_LOCATIONS[request.city] || [] : [];
+  const duration = 4; // Simplified duration
 
-  const duration = (() => {
-    const [startH, startM] = request.startTime.split(':').map(Number);
-    const [endH, endM] = request.endTime.split(':').map(Number);
-    const totalStart = startH + startM / 60;
-    const totalEnd = endH + endM / 60;
-    const diff = totalEnd - totalStart;
-    return diff > 0 ? diff : 0;
-  })();
-
-  const totalPrice = selectedVendors.reduce((sum, selection) => {
+  const rawTotalPrice = selectedVendors.reduce((sum, selection) => {
     const vendor = MOCK_VENDORS.find(v => v.id === selection.vendorId);
     if (!vendor) return sum;
     return sum + calculateVendorCost(vendor, request, duration, selection.packageId, selection.options);
   }, 0);
 
-  const topRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    topRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [step]);
+  const finalTotalPrice = appliedDiscount ? Math.round(rawTotalPrice * appliedDiscount.multiplier) : rawTotalPrice;
+  const discountAmount = rawTotalPrice - finalTotalPrice;
 
-  useEffect(() => {
-    if (step === 2 && neededServices.length === 0) {
-      const recs = request.eventType ? (EVENT_TYPE_RECOMMENDATIONS[request.eventType as EventType] || []) : [];
-      const combined = Array.from(new Set([...recs]));
-      
-      if (combined.length === 0 && request.eventType) combined.push(ServiceCategory.DECOR);
-      
-      setNeededServices(combined);
-    }
-  }, [step, request]);
+  const topRef = useRef<HTMLDivElement>(null);
+  useEffect(() => { topRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [step]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
     if (type === 'checkbox') {
       const checked = (e.target as HTMLInputElement).checked;
-      
-      if (name === 'isLocationUndecided') {
-         // When checking "Address Undecided", we DO NOT clear city/district anymore.
-         // We just clear the specific address input.
-         setRequest(prev => ({
-            ...prev,
-            isLocationUndecided: checked,
-            address: checked ? '' : prev.address
-         }));
-      } else {
-         setRequest(prev => ({ ...prev, [name]: checked }));
-      }
+      setRequest(prev => ({ ...prev, [name]: checked }));
     } else {
-      if (name === 'city') {
-        setRequest(prev => ({ 
-            ...prev, 
-            city: value, 
-            district: '',
-            isLocationUndecided: false // Reset undecided if city changes to force re-selection flow if needed
-        }));
-      } else if (name === 'district') {
-        setRequest(prev => ({ 
-            ...prev, 
-            district: value 
-        }));
-      } else {
-        setRequest(prev => ({ ...prev, [name]: value }));
-      }
+      setRequest(prev => ({ ...prev, [name]: value }));
     }
   };
 
   const toggleService = (category: ServiceCategory) => {
-    setNeededServices(prev => 
-      prev.includes(category) 
-        ? prev.filter(c => c !== category) 
-        : [...prev, category]
-    );
-    if (neededServices.includes(category)) {
-      setSelectedVendors(prev => prev.filter(s => s.category !== category));
-    }
+    setNeededServices(prev => prev.includes(category) ? prev.filter(c => c !== category) : [...prev, category]);
+    setSelectedVendors(prev => prev.filter(s => s.category !== category));
   };
 
   const selectVendor = (category: ServiceCategory, vendorId: string, packageId?: string, options?: any) => {
+    // If it's Decor, we need extra config first
+    if (category === ServiceCategory.DECOR && !options) {
+        setPendingDecorSelection({ vendorId, packageId });
+        setActiveDetailVendor(null);
+        return;
+    }
+
     setSelectedVendors(prev => {
       const filtered = prev.filter(s => s.category !== category);
       return [...filtered, { category, vendorId, packageId, options }];
     });
+    setActiveDetailVendor(null); // Close modal on selection
   };
 
-  const handleFinish = async () => {
-    setStep(4);
-    setIsLoadingAi(true);
+  const handleDecorConfigConfirm = (options: any) => {
+      if (pendingDecorSelection) {
+          selectVendor(ServiceCategory.DECOR, pendingDecorSelection.vendorId, pendingDecorSelection.packageId, options);
+          setPendingDecorSelection(null);
+      }
+  };
+
+  const handleApplyDiscount = () => {
+    const discount = MOCK_DISCOUNTS.find(d => d.code === discountCodeInput);
+    if (!discount) {
+      setToastMessage('❌ 折扣碼無效或已過期');
+      return;
+    }
+    if (new Date(discount.expiry) < new Date()) {
+      setToastMessage('❌ 此折扣碼已超過有效期限');
+      return;
+    }
+    setAppliedDiscount(discount);
+    setToastMessage(`✅ 折扣碼 "${discount.code}" 已套用：${(1 - discount.multiplier) * 100}% OFF`);
+  };
+
+  const handleQuickTest = () => {
+    const futureDate = new Date();
+    futureDate.setDate(futureDate.getDate() + 7);
+    const dateStr = futureDate.toISOString().split('T')[0];
+    const cities = Object.keys(TAIWAN_LOCATIONS);
+    const randomCity = cities[Math.floor(Math.random() * cities.length)];
+    const randomDist = TAIWAN_LOCATIONS[randomCity][0];
+
+    const testRequest = {
+        name: 'JK小丑',
+        phone: '0857888888',
+        date: dateStr,
+        startTime: '14:00',
+        endTime: '18:00',
+        isLocationUndecided: false,
+        city: randomCity,
+        district: randomDist,
+        venueName: '測試派對中心',
+        address: '測試路 123 號 4 樓',
+        eventType: EventType.BIRTHDAY
+    };
+
+    randomlyEnableVendors(dateStr, randomCity);
+    setRequest(testRequest);
+    setNeededServices([ServiceCategory.HOST, ServiceCategory.DECOR, ServiceCategory.CAKE]);
+    setToastMessage("✅ 快速測試已填入，隨機挑選一半供應商已開啟檔期！");
+  };
+
+  const handleGenerateAiPlan = async () => {
+    setIsAiLoading(true);
     const plan = await generateEventPlan({
-      userRequest: request,
-      selections: selectedVendors,
-      totalCost: totalPrice,
-      durationHours: duration
+      userRequest: request, selections: selectedVendors, totalCost: finalTotalPrice, durationHours: duration
     });
     setAiPlan(plan);
-    setIsLoadingAi(false);
+    setIsAiLoading(false);
   };
 
-  // Quick Test / Auto Fill
-  const handleQuickTest = () => {
-    resetVendorsForTesting();
-
-    setRequest({
-      name: '測試員',
-      phone: '0900000000',
-      date: new Date().toISOString().split('T')[0], // Today
-      startTime: '09:00',
-      endTime: '22:00',
-      isLocationUndecided: true, // Address undecided
-      city: '台北市', // Auto fill city
-      district: '信義區', // Auto fill district
-      address: '',
-      eventType: EventType.BIRTHDAY,
-    });
-
-    const allCats = Object.values(ServiceCategory);
-    setNeededServices(allCats);
-
-    setStep(3);
+  const handleFinalSubmit = () => {
+    setIsSubmitting(true);
+    // Add default PENDING status to all selected vendors
+    const finalSelections = selectedVendors.map(s => ({...s, status: 'PENDING' as const}));
     
-    setToastMessage('🚀 測試模式：已強制解鎖所有廠商，並自動填寫(台北市/信義區)！');
-    setTimeout(() => setToastMessage(null), 3000);
+    setTimeout(() => {
+        const newOrder: Order = {
+            id: 'EZ-' + Math.random().toString(36).substr(2, 6).toUpperCase(),
+            userRequest: request,
+            selections: finalSelections,
+            totalCost: finalTotalPrice,
+            discountApplied: discountAmount,
+            discountCode: appliedDiscount?.code,
+            durationHours: duration,
+            status: 'PENDING',
+            createdAt: new Date().toISOString(),
+            aiPlan: aiPlan
+        };
+        MOCK_ORDERS.push(newOrder);
+
+        // Update sold counts for vendors in mock data
+        finalSelections.forEach(sel => {
+            const vendor = MOCK_VENDORS.find(v => v.id === sel.vendorId);
+            if (vendor && sel.packageId) {
+                const pkg = vendor.packages.find(p => p.id === sel.packageId);
+                if (pkg) {
+                    pkg.soldCount = (pkg.soldCount || 0) + 1;
+                }
+            }
+        });
+
+        setIsSubmitting(false);
+        setStep(5);
+    }, 1500);
   };
 
   const validateStep1 = () => {
-      const errors = [];
-      if (!request.name) errors.push('姓名');
-      if (!request.phone) errors.push('電話');
-      if (!request.date) errors.push('日期');
-      if (!request.eventType) errors.push('活動性質');
-      
-      if (!request.city) errors.push('縣市');
-      if (!request.district) errors.push('地區');
-      
-      // Address is required ONLY if isLocationUndecided is false
-      if (!request.isLocationUndecided && !request.address) errors.push('活動地址');
-      
-      if (errors.length > 0) {
+      const errors = !request.name || !request.phone || !request.date || !request.eventType || !request.city || !request.district;
+      if (errors) {
           setHighlightErrors(true);
-          setToastMessage(`🔥 請填寫以下必填欄位：${errors.join('、')}`);
-          setTimeout(() => setToastMessage(null), 4000);
+          setToastMessage(`🔥 請完整填寫所有標示欄位`);
           return false;
       }
-      setHighlightErrors(false);
       return true;
   };
 
-  const getInputClass = (value: any, isError: boolean = false, disabled: boolean = false) => `
-    mt-1 block w-full rounded-md shadow-sm p-3 transition-all duration-300
-    ${isError ? 'border-2 border-red-500 bg-red-900/10' : 'border border-slate-600'}
-    ${value ? 'bg-slate-700 text-white' : 'bg-slate-800 text-slate-300'}
-    ${disabled ? 'opacity-50 cursor-not-allowed bg-slate-900' : ''}
-    focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus:bg-slate-700
+  const getInputClass = (value: any, isError: boolean = false) => `
+    mt-2 block w-full rounded-2xl p-5 transition-all duration-300 text-base font-bold
+    ${isError ? 'border-2 border-red-500 bg-red-900/10 shadow-[0_0_10px_rgba(239,68,68,0.3)]' : 'border border-white/10'}
+    ${value ? 'bg-[#f46011]/15 text-white border-[#f46011] shadow-[0_0_15px_rgba(244,96,17,0.2)]' : 'bg-white/5 text-slate-400'}
+    hover:border-[#f46011]/50 focus:border-[#f46011] focus:ring-1 focus:ring-[#f46011] focus:bg-[#f46011]/10 outline-none
   `;
 
-  const renderStarRating = (rating: number, count: number) => (
-    <div className="flex items-center space-x-1">
-      <div className="flex text-yellow-400">
-        {[1, 2, 3, 4, 5].map(star => (
-          <svg key={star} className={`w-3.5 h-3.5 ${star <= Math.round(rating) ? 'fill-current' : 'text-slate-600'}`} viewBox="0 0 20 20">
-            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-          </svg>
-        ))}
-      </div>
-      <span className="text-xs text-slate-400">({count})</span>
-    </div>
-  );
+  // Render modal for client to view specific order details
+  const renderClientOrderDetailModal = () => {
+      if (!selectedOrderVendor) return null;
+      const { order, selection } = selectedOrderVendor;
+      const vendor = MOCK_VENDORS.find(v => v.id === selection.vendorId);
+      const pkg = vendor?.packages?.find(p => p.id === selection.packageId);
+      const breakdown = calculateVendorCostBreakdown(vendor!, order.userRequest, order.durationHours, selection.packageId, selection.options);
+
+      return (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/90 backdrop-blur-md" onClick={() => setSelectedOrderVendor(null)}></div>
+            <div className="relative bg-[#0a0a0a] border border-white/10 rounded-[32px] p-8 w-full max-w-xl shadow-[0_0_80px_rgba(244,96,17,0.3)] animate-fade-in-up overflow-y-auto max-h-[90vh]">
+                <div className="flex justify-between items-center mb-8 border-b border-white/10 pb-4">
+                    <h4 className="text-2xl font-black text-white flex items-center">
+                        <span className="w-2 h-8 bg-primary mr-4 rounded-full"></span>
+                        訂單細項內容
+                    </h4>
+                    <button onClick={() => setSelectedOrderVendor(null)} className="text-slate-500 hover:text-white text-xl">✕</button>
+                </div>
+
+                <div className="space-y-8 mb-10">
+                    <div className="bg-white/5 p-6 rounded-3xl">
+                        <span className="text-sm text-slate-500 font-bold block mb-2">供應商</span>
+                        <div className="text-white font-bold text-2xl">{vendor?.name}</div>
+                        <div className="text-primary font-bold text-sm uppercase mt-1">{selection.category}</div>
+                    </div>
+                    
+                    <div className="bg-white/5 p-6 rounded-3xl border border-primary/20">
+                        <span className="text-sm text-slate-500 font-bold block mb-2">服務項目</span>
+                        <div className="text-white font-bold text-xl">{pkg?.name || '基本服務'}</div>
+                        {selection?.options?.deliveryMethod && <div className="text-primary text-base font-bold mt-2">方式: {selection.options.deliveryMethod === 'setup' ? '專人佈置' : (selection.options.deliveryMethod === 'delivery' ? '外送' : '自取')}</div>}
+                        {selection?.options?.pickupTime && <div className="text-slate-400 text-base font-bold mt-1">預計時間: {selection.options.pickupTime}</div>}
+                        
+                        <div className="mt-6 pt-6 border-t border-white/10 space-y-3">
+                            {breakdown.items.map((item, idx) => (
+                                <div key={idx} className="flex justify-between text-base">
+                                    <span className="text-slate-400">{item.label}</span>
+                                    <span className="text-white font-bold">${item.amount.toLocaleString()}</span>
+                                </div>
+                            ))}
+                            <div className="flex justify-between text-xl font-black text-primary pt-4 border-t border-white/10 mt-4">
+                                <span>總計</span>
+                                <span>${breakdown.total.toLocaleString()}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="flex gap-4">
+                    <button onClick={() => setSelectedOrderVendor(null)} className="flex-1 py-5 bg-white/10 hover:bg-white/20 text-white font-bold rounded-2xl text-lg transition-all">關閉</button>
+                </div>
+            </div>
+        </div>
+      );
+  };
 
   const renderStep1 = () => (
-    <div className="space-y-6 animate-fade-in">
-      <div className="flex justify-between items-center border-b border-slate-700 pb-2">
-        <h2 className="text-2xl font-bold text-white flex items-center">
-            <span className="mr-2 text-orange-500">🔥</span> 基本資料與活動資訊
+    <div className="space-y-10 animate-fade-in">
+      <div className="flex justify-between items-center border-b border-white/5 pb-6">
+        <h2 className="text-2xl md:text-3xl font-bold text-white flex items-center">
+            <span className="mr-4 text-primary neon-text">⚡</span> 活動基本資訊
         </h2>
-        <button 
-            onClick={handleQuickTest}
-            className="text-xs bg-teal-600 hover:bg-teal-500 text-white px-3 py-1.5 rounded-full border border-teal-400/50 shadow-lg animate-pulse"
-        >
-            🚀 測試專用：一鍵媒合 (全廠商解鎖)
-        </button>
+        <button onClick={handleQuickTest} className="text-xs bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 px-4 py-2 rounded-full hover:bg-indigo-500 hover:text-white transition-all font-bold uppercase tracking-wider">快速測試</button>
       </div>
-
-      <div className="bg-slate-800/50 border border-slate-700 p-6 rounded-xl shadow-lg">
-        <label className="block text-sm font-bold text-orange-400 mb-2">活動性質 (影響系統推薦)</label>
-        <select
-          name="eventType"
-          value={request.eventType}
-          onChange={handleInputChange}
-          className={`${getInputClass(request.eventType, highlightErrors && !request.eventType)} text-lg`}
-        >
-          <option value="">請選擇活動類型...</option>
-          {eventTypes.map(t => <option key={t} value={t}>{t}</option>)}
-        </select>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div>
-          <label className="block text-sm font-medium text-slate-300">聯絡人姓名</label>
-          <input type="text" name="name" value={request.name} onChange={handleInputChange} className={getInputClass(request.name, highlightErrors && !request.name)} placeholder="王小明" />
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 md:gap-8">
+        {/* Row 1: Type, Date, Start, End */}
+        <div className="md:col-span-1">
+            <label className="block text-lg font-bold text-slate-500 uppercase tracking-widest mb-3">活動性質</label>
+            <select name="eventType" value={request.eventType} onChange={handleInputChange} className={getInputClass(request.eventType, highlightErrors && !request.eventType)}>
+                <option value="">請選擇類型...</option>
+                {eventTypes.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
         </div>
-        <div>
-          <label className="block text-sm font-medium text-slate-300">聯絡電話</label>
-          <input type="tel" name="phone" value={request.phone} onChange={handleInputChange} className={getInputClass(request.phone, highlightErrors && !request.phone)} placeholder="0912-345-678" />
+        <div className="md:col-span-1">
+            <label className="block text-lg font-bold text-slate-500 uppercase mb-2">日期</label>
+            <input type="date" name="date" value={request.date} onChange={handleInputChange} className={getInputClass(request.date, highlightErrors && !request.date)} />
         </div>
-        <div>
-          <label className="block text-sm font-medium text-slate-300 mb-1">活動日期</label>
-          <input type="date" name="date" value={request.date} onChange={handleInputChange} className={`${getInputClass(request.date, highlightErrors && !request.date)} h-12 text-lg cursor-pointer`} />
-        </div>
-        <div className="flex space-x-4">
-          <div className="w-1/2">
-            <label className="block text-sm font-medium text-slate-300">開始時間</label>
+        <div className="md:col-span-1">
+            <label className="block text-lg font-bold text-slate-500 uppercase mb-2">開始</label>
             <input type="time" name="startTime" value={request.startTime} onChange={handleInputChange} className={getInputClass(request.startTime)} />
-          </div>
-          <div className="w-1/2">
-            <label className="block text-sm font-medium text-slate-300">結束時間</label>
+        </div>
+        <div className="md:col-span-1">
+            <label className="block text-lg font-bold text-slate-500 uppercase mb-2">結束</label>
             <input type="time" name="endTime" value={request.endTime} onChange={handleInputChange} className={getInputClass(request.endTime)} />
-          </div>
         </div>
 
-        {/* Location Section */}
-        <div className="md:col-span-2 space-y-3 border-t border-slate-700 pt-4">
-            <label className="block text-sm font-medium text-slate-300 mb-2">活動地點</label>
-            
-            <div className="flex space-x-4 mb-2">
-               <div className="w-1/2">
-                 <select 
-                   name="city"
-                   value={request.city}
-                   onChange={handleInputChange}
-                   className={getInputClass(request.city, highlightErrors && !request.city)}
-                 >
-                   <option value="">選擇縣市</option>
-                   {Object.keys(TAIWAN_LOCATIONS).map(city => (
-                     <option key={city} value={city}>{city}</option>
-                   ))}
-                 </select>
-               </div>
-               <div className="w-1/2">
-                 <select 
-                   name="district"
-                   value={request.district}
-                   onChange={handleInputChange}
-                   disabled={!request.city}
-                   className={getInputClass(request.district, highlightErrors && !request.district)}
-                 >
-                   <option value="">選擇地區</option>
-                   {availableDistricts.map(dist => (
-                     <option key={dist} value={dist}>{dist}</option>
-                   ))}
-                 </select>
-               </div>
-            </div>
+        {/* Row 2: Name, Phone, City, District */}
+        <div className="md:col-span-1">
+            <label className="block text-lg font-bold text-slate-500 uppercase mb-2">聯絡姓名</label>
+            <input type="text" name="name" value={request.name} onChange={handleInputChange} className={getInputClass(request.name, highlightErrors && !request.name)} placeholder="您的姓名" />
+        </div>
+        <div className="md:col-span-1">
+            <label className="block text-lg font-bold text-slate-500 uppercase mb-2">聯絡電話</label>
+            <input type="tel" name="phone" value={request.phone} onChange={handleInputChange} className={getInputClass(request.phone, highlightErrors && !request.phone)} placeholder="手機號碼" />
+        </div>
+        <div className="md:col-span-1">
+           <label className="block text-lg font-bold text-slate-500 uppercase mb-2">縣市</label>
+           <select name="city" value={request.city} onChange={handleInputChange} className={getInputClass(request.city, highlightErrors && !request.city)}><option value="">請選擇</option>{Object.keys(TAIWAN_LOCATIONS).map(city => <option key={city} value={city}>{city}</option>)}</select>
+        </div>
+        <div className="md:col-span-1">
+           <label className="block text-lg font-bold text-slate-500 uppercase mb-2">地區</label>
+           <select name="district" value={request.district} onChange={handleInputChange} disabled={!request.city} className={getInputClass(request.district, highlightErrors && !request.district)}><option value="">請選擇</option>{availableDistricts.map(dist => <option key={dist} value={dist}>{dist}</option>)}</select>
+        </div>
 
-            <div className="mb-2">
-                <input 
-                    type="text" 
-                    name="address" 
-                    value={request.address} 
-                    onChange={handleInputChange} 
-                    disabled={request.isLocationUndecided}
-                    className={getInputClass(request.address, highlightErrors && !request.address && !request.isLocationUndecided, request.isLocationUndecided)} 
-                    placeholder="請輸入詳細地址 (路/街/號/樓)" 
-                />
-            </div>
-
-            <div className="flex justify-end">
-                <label className={`flex items-center space-x-2 text-sm cursor-pointer transition-colors ${!request.city || !request.district ? 'opacity-50 cursor-not-allowed text-slate-500' : 'text-orange-400 hover:text-orange-300'}`}>
-                    <input 
-                        type="checkbox" 
-                        name="isLocationUndecided" 
-                        checked={request.isLocationUndecided} 
-                        onChange={handleInputChange} 
-                        disabled={!request.city || !request.district}
-                        className="rounded border-slate-600 bg-slate-800 text-orange-500 focus:ring-orange-500 disabled:opacity-50" 
-                    />
-                    <span>地址未定，為我推薦</span>
-                </label>
-            </div>
+        {/* Row 3: Venue, Address */}
+        <div className="md:col-span-1">
+            <label className="block text-lg font-bold text-slate-500 uppercase mb-2 tracking-widest">場地 / 飯店 / 餐廳名稱</label>
+            <input 
+              type="text" 
+              name="venueName" 
+              value={request.venueName} 
+              onChange={handleInputChange} 
+              className={getInputClass(request.venueName)} 
+              placeholder="例如：台北 W 飯店" 
+            />
+        </div>
+        <div className="md:col-span-3">
+            <label className="block text-lg font-bold text-slate-500 uppercase mb-2 tracking-widest">詳細地址</label>
+            <input 
+              type="text" 
+              name="address" 
+              value={request.address} 
+              onChange={handleInputChange} 
+              className={getInputClass(request.address)} 
+              placeholder="例如：中山區民權東路三段 1 號 3 樓 A 廳" 
+            />
+            <p className="mt-3 text-xs text-slate-600 italic font-bold">精確的地址能幫助供應商更準確計算車馬費與搬運費用。</p>
         </div>
       </div>
     </div>
   );
 
-  const renderStep2 = () => {
-    return (
-      <div className="space-y-6 animate-fade-in">
-        <h2 className="text-2xl font-bold border-b border-slate-700 pb-2 text-white flex items-center">
-            <span className="mr-2 text-orange-500">✨</span> 選擇服務項目
-        </h2>
-        <div className="bg-slate-800 p-4 rounded-lg flex justify-between items-center border border-slate-700 mb-6">
-          <div>
-            <span className="text-slate-400 text-sm">活動時數：</span>
-            <span className="font-bold text-lg text-orange-500 ml-2">{duration.toFixed(1)} 小時</span>
-          </div>
-          <div className="text-xs text-slate-500">({request.startTime} - {request.endTime})</div>
-        </div>
-
-        {SERVICE_GROUPS.map((group, groupIdx) => (
-            <div key={groupIdx} className="mb-8 last:mb-0">
-                <h3 className={`text-lg font-bold mb-4 flex items-center ${group.color} border-b ${group.borderColor} pb-2 w-full md:w-1/3`}>
-                    <span className="mr-2">{group.icon}</span> {group.label}
-                </h3>
-                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
-                    {group.items.map((cat) => (
-                        <label key={cat} className={`relative flex flex-col items-center p-3 border rounded-xl cursor-pointer transition-all text-center justify-center min-h-[100px] ${neededServices.includes(cat) ? 'border-orange-500 bg-orange-900/20 shadow-[0_0_10px_rgba(234,88,12,0.2)]' : 'hover:bg-slate-800 border-slate-700 bg-slate-900'}`}>
-                            <input type="checkbox" checked={neededServices.includes(cat)} onChange={() => toggleService(cat)} className="h-5 w-5 text-orange-600 bg-slate-800 border-slate-600 rounded mb-2" />
-                            <span className="font-medium text-slate-200 text-xs md:text-sm">{cat}</span>
-                        </label>
-                    ))}
-                </div>
-            </div>
-        ))}
-      </div>
-    );
-  };
-
-  const renderStep3 = () => {
-    // Only sort to keep Software/Hardware grouping implicitly or just sort by user need? 
-    // Usually user wants to see what they selected. 
-    // Let's filter needed categories but preserve the priority order constant or grouping.
-    // We can flat map the groups to maintain the order.
-    const orderedCategories = [...SERVICE_GROUPS[0].items, ...SERVICE_GROUPS[1].items];
-    const sortedNeededServices = orderedCategories.filter(c => neededServices.includes(c));
-
-    return (
-      <div className="space-y-8 animate-fade-in">
-        <h2 className="text-2xl font-bold border-b border-slate-700 pb-2 text-white flex items-center">
-            <span className="mr-2 text-orange-500">🤝</span> 媒合供應商
-        </h2>
-        
-        {sortedNeededServices.length === 0 ? (
-          <div className="text-center py-10 text-slate-500">您尚未選擇任何服務。</div>
-        ) : (
-          sortedNeededServices.map(category => {
-            const startH = parseInt(request.startTime.split(':')[0]);
-            const endH = Math.ceil(parseInt(request.endTime.split(':')[0]) + (parseInt(request.endTime.split(':')[1])/60));
-
-            const availableVendors = MOCK_VENDORS.filter(v => 
-              v.category === category && 
-              isVendorAvailable(v, request.date, startH, endH, request.city, request.isLocationUndecided)
-            );
-
-            const selection = selectedVendors.find(s => s.category === category);
-
-            return (
-              <div key={category} className="border-b border-slate-700 pb-8 last:border-0">
-                <h3 className="text-xl font-bold text-slate-200 mb-4 flex items-center">
-                  <span className="bg-indigo-900 text-indigo-300 text-xs px-2 py-1 rounded mr-2 border border-indigo-700">{category}</span>
-                  選擇您的{category === ServiceCategory.ACTOR ? '魔術師/演員' : category}
-                </h3>
-                
-                {availableVendors.length === 0 ? (
-                  <div className="bg-slate-800 border border-slate-700 rounded p-4 text-center">
-                    <p className="text-slate-500 text-sm">抱歉，在 <span className="font-bold text-slate-400">{request.city || '所有地區'}</span> 的該時段沒有可用的 {category}。</p>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {availableVendors.map(vendor => {
-                      const isSelected = selection?.vendorId === vendor.id;
-                      
-                      // For Decorators, we might need to show a package selector
-                      // For others, we calculate standard cost
-                      const { total: cost, items: costItems } = calculateVendorCostBreakdown(vendor, request, duration, selection?.packageId, selection?.options);
-
-                      // Package Service Logic (Decorator, Cake, Catering)
-                      const isPackageService = vendor.rateType === 'package' && vendor.packages.length > 0;
-                      const isDecorator = vendor.category === ServiceCategory.DECOR;
-                      const isCake = vendor.category === ServiceCategory.CAKE;
-                      const isCatering = vendor.category === ServiceCategory.CATERING;
-                      const isHost = vendor.category === ServiceCategory.HOST;
-
-                      // Hourly Rate Logic (Host/Performer/Photographer/Band)
-                      const isHourly = vendor.rateType === 'hourly';
-
-                      // Determine current times to show in inputs
-                      const currentStart = selection?.options?.serviceStartTime || request.startTime;
-                      const currentEnd = selection?.options?.serviceEndTime || request.endTime;
-
-                      // Setup/Teardown/Delivery State
-                      const deliveryMethod = selection?.options?.deliveryMethod || 'pickup';
-                      const needTeardown = selection?.options?.needTeardown || false;
-                      const setupStart = selection?.options?.setupStartTime || '10:00';
-                      const setupEnd = selection?.options?.setupEndTime || '12:00';
-                      const floor = selection?.options?.floor || '1F';
-                      
-                      // Check for Setup Availability based on Package Price
-                      const selectedPkgObj = isPackageService ? vendor.packages.find(p => p.id === selection?.packageId) : null;
-                      const isSetupAvailable = selectedPkgObj ? selectedPkgObj.price >= 5000 : false;
-
-                      return (
-                        <div key={vendor.id} className={`relative p-5 rounded-xl border transition-all flex flex-col glow-card ${isSelected ? 'border-orange-500 bg-slate-800 ring-2 ring-orange-500/30' : 'border-slate-700 bg-slate-900 hover:border-slate-500'}`}>
-                          <div className="flex gap-4">
-                            <img src={vendor.imageUrl} alt={vendor.name} className="w-24 h-24 rounded-lg object-cover bg-slate-800 border border-slate-600" />
-                            <div className="flex-1 min-w-0">
-                              <div className="flex justify-between items-start">
-                                <h4 className="font-bold text-slate-100 truncate pr-2 text-lg">{vendor.name}</h4>
-                                {isPackageService ? (
-                                    <div className="text-right">
-                                        <span className="text-orange-500 font-bold text-sm">
-                                            {isCake ? '商品價' : '方案價'}
-                                        </span>
-                                    </div>
-                                ) : (
-                                    <span className="text-orange-500 font-bold text-sm whitespace-nowrap">
-                                        ${cost.toLocaleString()} <span className="text-slate-500 text-xs font-normal">/ {vendor.rateType === 'hourly' ? 'hr' : '式'}</span>
-                                    </span>
-                                )}
-                              </div>
-                              <div className="mt-1">{renderStarRating(vendor.rating, vendor.reviewCount)}</div>
-                              <p className="mt-2 text-sm text-slate-400 line-clamp-2">{vendor.description}</p>
+  const renderStep2 = () => (
+    <div className="space-y-12 animate-fade-in">
+      <h2 className="text-2xl md:text-3xl font-bold border-b border-white/5 pb-6 text-white flex items-center">
+          <span className="mr-4 text-primary neon-text">✨</span> 選擇活動所需服務
+      </h2>
+      {SERVICE_GROUPS.map((group, gIdx) => (
+          <div key={gIdx} className="space-y-4">
+              <h3 className={`text-sm font-black ${group.color} uppercase tracking-[0.3em] ml-2`}>{group.label}</h3>
+              <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                  {group.items.map((cat) => (
+                      <label 
+                        key={cat} 
+                        className={`group relative p-3 md:p-4 border rounded-2xl cursor-pointer transition-all flex flex-col items-center justify-center gap-2 h-full ${
+                          neededServices.includes(cat) 
+                            ? 'border-primary bg-primary/20 shadow-[0_0_15px_rgba(244,96,17,0.4)] scale-[1.02]' 
+                            : 'border-white/5 bg-white/5 hover:border-white/20 hover:bg-white/10'
+                        }`}
+                      >
+                          <input type="checkbox" checked={neededServices.includes(cat)} onChange={() => toggleService(cat)} className="hidden" />
+                          <div className={`transition-all duration-300 ${neededServices.includes(cat) ? 'text-white scale-110' : 'text-slate-600 group-hover:text-primary'}`}>
+                            {CATEGORY_ICONS[cat] || <svg className="w-8 h-8 md:w-10 md:h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M12 4v16m8-8H4" /></svg>}
+                          </div>
+                          <span className={`font-black text-sm tracking-widest uppercase transition-colors text-center leading-tight ${neededServices.includes(cat) ? 'text-white' : 'text-slate-500 group-hover:text-slate-300'}`}>
+                            {cat}
+                          </span>
+                          {neededServices.includes(cat) && (
+                            <div className="absolute top-2 right-2 w-5 h-5 bg-primary text-white rounded-full flex items-center justify-center shadow-lg">
+                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={4}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
                             </div>
-                          </div>
-                          
-                          {/* Specific Time Selection for Hourly Vendors */}
-                          {isHourly && (
-                              <div className="mt-4 bg-slate-800 p-2 rounded border border-slate-700">
-                                  <label className="text-xs text-slate-400 block mb-1 font-bold">預約時段 (依時數計費)</label>
-                                  <div className="flex gap-2">
-                                      <input 
-                                        type="time" 
-                                        value={currentStart}
-                                        onChange={(e) => {
-                                            const newOpts = { ...selection?.options, serviceStartTime: e.target.value };
-                                            // Auto adjust end time to be at least start + 1hr if needed, or just let calc handle it
-                                            if(!selection?.options?.serviceEndTime) newOpts.serviceEndTime = request.endTime;
-                                            selectVendor(category, vendor.id, selection?.packageId, newOpts);
-                                        }}
-                                        className="bg-slate-900 border border-slate-600 rounded text-xs text-white p-1 w-full"
-                                      />
-                                      <span className="text-slate-500 self-center">to</span>
-                                      <input 
-                                        type="time" 
-                                        value={currentEnd}
-                                        onChange={(e) => {
-                                             const newOpts = { ...selection?.options, serviceEndTime: e.target.value };
-                                             if(!selection?.options?.serviceStartTime) newOpts.serviceStartTime = request.startTime;
-                                             selectVendor(category, vendor.id, selection?.packageId, newOpts);
-                                        }}
-                                        className="bg-slate-900 border border-slate-600 rounded text-xs text-white p-1 w-full"
-                                      />
-                                  </div>
-                              </div>
                           )}
+                      </label>
+                  ))}
+              </div>
+          </div>
+      ))}
+    </div>
+  );
 
-                          {/* Package/Product Selector */}
-                          {isPackageService && (
-                              <div className="mt-4 bg-slate-800 p-2 rounded border border-slate-700">
-                                  <label className="text-xs text-slate-400 block mb-1">
-                                      {isHost ? '選擇主持方案' : (isCake ? '選擇蛋糕款式' : (isCatering ? '選擇餐點方案' : '選擇佈置方案'))}
-                                  </label>
-                                  <select 
-                                    className="w-full bg-slate-900 text-white text-sm border border-slate-600 rounded p-1 mb-2"
-                                    value={selection?.packageId || ''}
-                                    onChange={(e) => {
-                                        const newPkgId = e.target.value;
-                                        const newPkg = vendor.packages.find(p => p.id === newPkgId);
-                                        let newMethod = selection?.options?.deliveryMethod || 'pickup';
+  const renderStep3 = () => (
+    <div className="space-y-12 animate-fade-in">
+      <h2 className="text-2xl md:text-3xl font-bold border-b border-white/5 pb-6 text-white flex items-center">
+          <span className="mr-4 text-primary neon-text">🤝</span> 供應商即時報價
+      </h2>
+      <p className="text-sm text-slate-500 -mt-8 mb-6 font-bold">點擊供應商卡片可查看 <span className="text-white font-bold">作品集照片</span>、<span className="text-white font-bold">示範影片</span> 及 <span className="text-white font-bold">詳細方案內容</span>。</p>
+      
+      {neededServices.map(category => {
+          const vendors = MOCK_VENDORS.filter(v => v.category === category);
+          const sel = selectedVendors.find(s => s.category === category);
+          return (
+            <div key={category} className="space-y-6">
+              <h3 className="text-xl md:text-2xl font-bold text-primary flex items-center"><span className="w-1.5 h-6 bg-primary mr-4 rounded-full"></span>{category}</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {vendors.map(v => (
+                  <div key={v.id} onClick={() => setActiveDetailVendor(v)} className={`p-6 rounded-3xl border transition-all glass-card cursor-pointer group ${sel?.vendorId === v.id ? 'border-[#f46011] bg-[#f46011]/5' : 'border-white/10 hover:border-white/30'}`}>
+                    <div className="flex gap-6">
+                      <img src={v.imageUrl} className="w-20 h-20 rounded-2xl object-cover border border-white/10" />
+                      <div className="flex-1">
+                        <div className="flex justify-between items-start">
+                            <h4 className="font-bold text-white text-lg md:text-xl group-hover:text-primary transition-colors">{v.name}</h4>
+                            <span className="text-primary font-black text-lg md:text-xl">${v.rate.toLocaleString()}</span>
+                        </div>
+                        {sel?.vendorId === v.id ? (
+                            <div className="mt-4 w-full py-3 rounded-xl text-sm font-bold tracking-widest bg-[#f46011] text-white shadow-[0_5px_15px_rgba(244,96,17,0.3)] text-center">
+                                已選擇 (點擊查看詳情)
+                            </div>
+                        ) : (
+                            <div className="mt-4 w-full py-3 rounded-xl text-sm font-bold tracking-widest bg-white/10 text-slate-400 text-center group-hover:bg-white/20 group-hover:text-white transition-all">
+                                查看作品與方案
+                            </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+      })}
+    </div>
+  );
 
-                                        // If switching to a cheap package and currently on setup, reset to pickup to prevent invalid state
-                                        // Exception for Catering, setup usually allowed
-                                        // Exception for Host, delivery method not used (stays pickup/default)
-                                        if (!isCatering && !isHost && newPkg && newPkg.price < 5000 && newMethod === 'setup') {
-                                            newMethod = 'pickup';
-                                        }
-                                        
-                                        selectVendor(category, vendor.id, newPkgId, { ...selection?.options, deliveryMethod: newMethod, needSetup: newMethod === 'setup' });
-                                    }}
-                                  >
-                                      <option value="" disabled>
-                                          {isCake ? '請選擇商品' : '請選擇方案'}
-                                      </option>
-                                      {vendor.packages.map(p => (
-                                          <option key={p.id} value={p.id}>{p.name} - ${p.price.toLocaleString()}</option>
-                                      ))}
-                                  </select>
-                                  
-                                  {/* Delivery Options - Hide for Host packages */}
-                                  {!isHost && (
-                                    <div className="mt-2 border-t border-slate-700 pt-2">
-                                        <label className="text-xs text-slate-400 block mb-1">取貨/配送方式</label>
-                                        <select 
-                                            value={deliveryMethod}
-                                            onChange={(e) => selectVendor(category, vendor.id, selection?.packageId, { ...selection?.options, deliveryMethod: e.target.value, needSetup: e.target.value === 'setup' })}
-                                            className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-sm text-white"
-                                        >
-                                            <option value="pickup">自行取貨 (免運費)</option>
-                                            <option value="delivery">純外送 (僅配送不佈置)</option>
-                                            {/* Show Setup Option primarily for Decor and Catering, typically not for single Cakes unless specified */}
-                                            {(!isCake || isSetupAvailable) && (
-                                                <option value="setup" disabled={!isSetupAvailable} className={!isSetupAvailable ? 'text-slate-500' : ''}>
-                                                    {isCatering ? '外送含擺盤服務 (Buffet Line)' : '專人到府佈置'} {!isSetupAvailable && !isCatering ? '(需選購$5,000以上方案)' : ''}
-                                                </option>
-                                            )}
-                                        </select>
-                                    </div>
-                                  )}
-
-                                  {/* Setup Time & Floor Selection - Only show relevant fields */}
-                                  {!isHost && deliveryMethod !== 'pickup' && (
-                                      <div className="mt-2 pt-2 border-t border-slate-600 animate-fade-in">
-                                          {deliveryMethod === 'setup' && (
-                                              <>
-                                                <label className="text-[10px] text-orange-400 block mb-1 font-bold">專人進場/擺盤時間</label>
-                                                <div className="flex gap-2 mb-2">
-                                                    <input 
-                                                        type="time" 
-                                                        value={setupStart}
-                                                        onChange={(e) => selectVendor(category, vendor.id, selection?.packageId, { ...selection?.options, setupStartTime: e.target.value })}
-                                                        className="bg-slate-900 border border-slate-600 rounded text-[10px] text-white p-1 w-full"
-                                                    />
-                                                    <span className="text-slate-500 self-center text-[10px]">to</span>
-                                                    <input 
-                                                        type="time" 
-                                                        value={setupEnd}
-                                                        onChange={(e) => selectVendor(category, vendor.id, selection?.packageId, { ...selection?.options, setupEndTime: e.target.value })}
-                                                        className="bg-slate-900 border border-slate-600 rounded text-[10px] text-white p-1 w-full"
-                                                    />
-                                                </div>
-                                              </>
-                                          )}
-
-                                          {/* Hide Floor/Teardown for simple Cakes to keep it clean, show for Catering/Decor */}
-                                          {!isCake && (
-                                              <>
-                                                  <label className="text-[10px] text-slate-400 block mb-1 font-bold">
-                                                      {deliveryMethod === 'delivery' ? '樓層 (非 1F 會有樓層費)' : '樓層 (請告知以利進場)'}
-                                                  </label>
-                                                  <select 
-                                                    value={floor}
-                                                    onChange={(e) => selectVendor(category, vendor.id, selection?.packageId, { ...selection?.options, floor: e.target.value })}
-                                                    className="w-full bg-slate-900 border border-slate-600 rounded text-[10px] text-white p-1 mb-2"
-                                                  >
-                                                      <option value="1F">1F (無樓層費)</option>
-                                                      <option value="2F">2F</option>
-                                                      <option value="3F">3F</option>
-                                                      <option value="4F">4F</option>
-                                                      <option value="5F">5F</option>
-                                                      <option value="6F以上">6F以上</option>
-                                                      <option value="B1">B1</option>
-                                                      <option value="B2">B2</option>
-                                                  </select>
-
-                                                  {isDecorator && (
-                                                      <label className="flex items-center space-x-1 text-xs text-slate-300 cursor-pointer">
-                                                          <input 
-                                                            type="checkbox" 
-                                                            checked={needTeardown} 
-                                                            onChange={(e) => selectVendor(category, vendor.id, selection?.packageId, { ...selection?.options, needTeardown: e.target.checked })}
-                                                            className="rounded bg-slate-700 border-slate-500"
-                                                          />
-                                                          <span>需要撤場服務</span>
-                                                      </label>
-                                                  )}
-                                              </>
-                                          )}
-                                      </div>
-                                  )}
-
-                                  {isSelected && selection?.packageId && (
-                                      <div className="mt-4 bg-slate-950/50 rounded-lg p-3 border border-slate-600/50">
-                                          <div className="space-y-1.5 mb-2">
-                                              {costItems.map((item, idx) => (
-                                                  <div key={idx} className="flex justify-between text-xs text-slate-400">
-                                                      <span>{item.label}</span>
-                                                      <span className="font-mono">${item.amount.toLocaleString()}</span>
-                                                  </div>
-                                              ))}
-                                          </div>
-                                          <div className="flex justify-between items-center border-t border-slate-600/50 pt-2 mt-2">
-                                              <span className="text-sm font-bold text-white">總計</span>
-                                              <span className="text-xl font-black text-orange-500 tracking-tight">${cost.toLocaleString()}</span>
-                                          </div>
-                                      </div>
-                                  )}
-                              </div>
-                          )}
-
-                          <div className="mt-4 flex space-x-3 pt-3 border-t border-slate-700">
-                            <button onClick={() => setViewingVendor(vendor)} className="flex-1 text-xs py-2 border border-slate-600 text-slate-300 rounded-md hover:bg-slate-800 font-medium transition-colors">查看作品與評價</button>
-                            <button 
-                                onClick={() => {
-                                    // If package service and no package selected, select first package by default
-                                    if (isPackageService && !selection?.packageId && vendor.packages.length > 0) {
-                                        selectVendor(category, vendor.id, vendor.packages[0].id, selection?.options);
-                                    } else {
-                                        // Ensure options carry over or initialize defaults if newly selecting
-                                        const defaultOpts = isHourly ? { serviceStartTime: request.startTime, serviceEndTime: request.endTime } : selection?.options;
-                                        selectVendor(category, vendor.id, selection?.packageId, defaultOpts);
-                                    }
-                                }} 
-                                className={`flex-1 text-xs py-2 rounded-md font-bold transition-colors shadow-md ${isSelected ? 'bg-orange-600 text-white' : 'bg-slate-700 text-white hover:bg-slate-600'}`}
-                            >
-                              {isSelected ? '已選擇' : '選擇'}
-                            </button>
-                          </div>
+  const renderStep4Review = () => (
+    <div className="space-y-10 animate-fade-in">
+      <h2 className="text-2xl md:text-3xl font-bold border-b border-white/5 pb-6 text-white flex items-center">
+          <span className="mr-4 text-primary neon-text">📑</span> 訂購總表檢視
+      </h2>
+      <div className="glass-card rounded-[40px] p-8 md:p-12 border border-white/10 space-y-10">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-base">
+              <div className="p-6 bg-white/5 rounded-3xl"><span className="text-slate-500 block text-xs font-bold uppercase mb-3 tracking-wider">主辦人</span><span className="font-bold text-white text-lg">{request.name}</span></div>
+              <div className="p-6 bg-white/5 rounded-3xl"><span className="text-slate-500 block text-xs font-bold uppercase mb-3 tracking-wider">聯絡資訊</span><span className="font-bold text-white text-lg">{request.phone}</span></div>
+              <div className="p-6 bg-white/5 rounded-3xl"><span className="text-slate-500 block text-xs font-bold uppercase mb-3 tracking-wider">活動日期時間</span><span className="font-bold text-white text-lg">{request.date} {request.startTime}-{request.endTime}</span></div>
+              <div className="p-6 bg-white/5 rounded-3xl md:col-span-2"><span className="text-slate-500 block text-xs font-bold uppercase mb-3 tracking-wider">場地與詳細地址</span><span className="font-bold text-white text-lg">{request.city}{request.district} {request.venueName} - {request.address} ({request.eventType})</span></div>
+          </div>
+          
+          <div className="space-y-6">
+              <h4 className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center">
+                  <span className="w-2 h-2 bg-primary rounded-full mr-3"></span> 選購服務清單
+              </h4>
+              <div className="space-y-4">
+                  {selectedVendors.map((sel, idx) => {
+                      const vendor = MOCK_VENDORS.find(v => v.id === sel.vendorId);
+                      const pkg = vendor?.packages?.find(p => p.id === sel.packageId);
+                      const breakdown = calculateVendorCostBreakdown(vendor!, request, duration, sel.packageId, sel.options);
+                      
+                      return (
+                        <div key={idx} className="bg-white/5 p-6 rounded-3xl border border-white/5 hover:bg-white/10 transition-all">
+                            <div className="flex items-center gap-6">
+                                <img src={pkg ? pkg.imageUrls[0] : vendor?.imageUrl} className="w-16 h-16 rounded-2xl object-cover border border-white/10" />
+                                <div className="flex-1">
+                                    <span className="text-xs text-primary font-black uppercase">{sel.category}</span>
+                                    <div className="font-bold text-white text-lg md:text-xl">{vendor?.name}</div>
+                                    {pkg && <div className="text-sm text-slate-400 mt-1 truncate max-w-[200px] md:max-w-none font-medium">方案: {pkg.name}</div>}
+                                </div>
+                                <span className="font-black text-white text-xl md:text-2xl">${breakdown.total.toLocaleString()}</span>
+                            </div>
+                            {/* Cost Breakdown Details */}
+                            {breakdown.items.length > 1 && (
+                                <div className="mt-4 pt-4 border-t border-white/5 pl-24 text-sm space-y-2">
+                                    {breakdown.items.map((item, i) => (
+                                        <div key={i} className="flex justify-between text-slate-400 font-medium">
+                                            <span>• {item.label}</span>
+                                            <span>${item.amount.toLocaleString()}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                         </div>
                       );
-                    })}
-                  </div>
-                )}
+                  })}
               </div>
-            );
-          })
-        )}
-      </div>
-    );
-  };
-
-  const renderSummary = () => {
-    return (
-      <div className="space-y-6 animate-fade-in">
-        <div className="bg-green-900/30 border border-green-500/50 rounded-lg p-6 text-center shadow-[0_0_15px_rgba(34,197,94,0.2)]">
-          <h2 className="text-2xl font-bold text-green-400 mb-2">預約成功！</h2>
-          <p className="text-green-200">您的活動需求單已送出，我們將儘快與您聯繫確認。</p>
-        </div>
-        <div className="bg-slate-800 rounded-lg shadow-lg border border-slate-700 p-6">
-          <h3 className="text-lg font-bold mb-4 border-b border-slate-700 pb-2 text-white">訂單摘要</h3>
-          <div className="grid grid-cols-2 gap-4 text-sm mb-6 text-slate-300">
-            <div><span className="text-slate-500">活動性質：</span> {request.eventType}</div>
-            <div><span className="text-slate-500">聯絡人：</span> {request.name}</div>
-            <div><span className="text-slate-500">日期：</span> {request.date}</div>
-            <div><span className="text-slate-500">時間：</span> {request.startTime} - {request.endTime}</div>
-            <div className="col-span-2">
-                <span className="text-slate-500">地點：</span> 
-                {request.isLocationUndecided 
-                    ? `${request.city} ${request.district} (地址未定)` 
-                    : `${request.city}${request.district}${request.address}`}
-            </div>
           </div>
-          <h4 className="font-medium mb-2 text-white">已選服務</h4>
-          <div className="space-y-2 mb-6">
-            {selectedVendors.map((sel, idx) => {
-              const vendor = MOCK_VENDORS.find(v => v.id === sel.vendorId);
-              const cost = vendor ? calculateVendorCost(vendor, request, duration, sel.packageId, sel.options) : 0;
-              const pkgName = vendor?.packages?.find(p => p.id === sel.packageId)?.name;
-              
-              // Display time range if specific
-              const timeDisplay = sel.options?.serviceStartTime && sel.options?.serviceEndTime 
-                ? ` (${sel.options.serviceStartTime}-${sel.options.serviceEndTime})`
-                : '';
-              
-              const floorDisplay = sel.options?.floor && sel.options?.floor !== '1F' ? `, ${sel.options.floor}` : '';
-              
-              // Method Display
-              let methodDisplay = '';
-              if (sel.options?.deliveryMethod === 'setup') methodDisplay = sel.category === ServiceCategory.CATERING ? '外送含擺盤' : '專人佈置';
-              else if (sel.options?.deliveryMethod === 'delivery') methodDisplay = '純外送';
-              else if (sel.options?.deliveryMethod === 'pickup') methodDisplay = '自取';
 
-              return (
-                <div key={idx} className="flex justify-between text-sm bg-slate-900 p-3 rounded border border-slate-700">
-                  <div className="flex flex-col">
-                      <span className="text-slate-200 font-bold">{sel.category} - {vendor?.name}</span>
-                      {pkgName && <span className="text-xs text-slate-500">{pkgName}</span>}
-                      {timeDisplay && <span className="text-xs text-indigo-400">{timeDisplay}</span>}
-                      {methodDisplay && (
-                          <span className="text-xs text-orange-400">
-                              {/* Hide delivery method text for Host, except if logic changes */}
-                              {sel.category !== ServiceCategory.HOST && methodDisplay} 
-                              {sel.options?.deliveryMethod !== 'pickup' && sel.category !== ServiceCategory.CAKE && sel.category !== ServiceCategory.HOST && floorDisplay}
-                              {sel.options?.setupStartTime && ` (${sel.options.setupStartTime}-${sel.options.setupEndTime})`}
-                          </span>
-                      )}
+          <div className="space-y-6 border-t border-white/5 pt-10">
+              <h4 className="text-xs font-black text-slate-500 uppercase tracking-widest">折扣優惠套用</h4>
+              <div className="flex gap-6">
+                  <input 
+                      type="text" 
+                      placeholder="請輸入折扣碼 (例如: 7979)" 
+                      value={discountCodeInput}
+                      onChange={(e) => setDiscountCodeInput(e.target.value)}
+                      className="flex-1 bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-base text-white focus:border-primary outline-none transition-all w-full font-bold"
+                  />
+                  <button 
+                      onClick={handleApplyDiscount}
+                      className="px-8 py-4 bg-white/10 hover:bg-white/20 text-white rounded-2xl text-sm font-black uppercase tracking-widest transition-all whitespace-nowrap"
+                  >
+                      套用
+                  </button>
+              </div>
+              {appliedDiscount && (
+                  <div className="flex justify-between items-center bg-green-500/10 border border-green-500/20 px-6 py-3 rounded-2xl">
+                      <span className="text-sm text-green-400 font-bold">已成功套用: {appliedDiscount.code}</span>
+                      <span className="text-sm text-green-400 font-black">-${discountAmount.toLocaleString()}</span>
                   </div>
-                  <span className="font-mono text-orange-400 font-bold">${cost.toLocaleString()}</span>
-                </div>
-              )
-            })}
+              )}
           </div>
-          <div className="flex justify-between items-center border-t border-slate-700 pt-4">
-            <span className="text-xl font-bold text-white">總金額</span>
-            <span className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-red-500">${totalPrice.toLocaleString()}</span>
+
+          <div className="flex justify-between items-center border-t border-white/10 pt-10">
+              <span className="text-sm md:text-base font-bold text-slate-400 uppercase tracking-widest">媒合委託預估總預算</span>
+              <div className="text-right">
+                  {appliedDiscount && <div className="text-sm text-slate-500 line-through mb-1 font-bold">${rawTotalPrice.toLocaleString()}</div>}
+                  <span className="text-4xl md:text-5xl font-black text-primary neon-text tracking-tighter">${finalTotalPrice.toLocaleString()}</span>
+              </div>
           </div>
-        </div>
-        <div className="bg-gradient-to-r from-slate-900 to-indigo-900/40 border border-indigo-500/30 rounded-lg p-6 relative overflow-hidden">
-            <h3 className="text-lg font-bold text-indigo-200 mb-2">AI 智慧活動助手</h3>
-             {isLoadingAi ? <p className="text-slate-400">正在生成...</p> : <div className="prose prose-sm prose-invert max-w-none text-slate-300 whitespace-pre-line">{aiPlan}</div>}
-        </div>
-        <button onClick={onBack} className="w-full py-3 bg-slate-700 text-white rounded-lg hover:bg-slate-600 transition-colors border border-slate-600">回到首頁</button>
       </div>
-    );
-  };
+
+      <div className="bg-indigo-900/10 border border-indigo-500/20 p-10 rounded-[32px] relative overflow-hidden group">
+          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+              <svg className="w-24 h-24 text-indigo-500" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
+          </div>
+          <h3 className="text-indigo-400 font-black text-sm mb-6 flex items-center tracking-widest uppercase">
+              ✨ AI 生成活動企劃建議 (選填)
+          </h3>
+          {aiPlan ? (
+            <p className="text-sm text-slate-300 whitespace-pre-line leading-loose font-medium">{aiPlan}</p>
+          ) : (
+            <div className="text-center py-6">
+                <p className="text-sm text-slate-500 mb-8 italic font-bold">點擊下方按鈕，讓 AI 為您的活動生成專業流程建議</p>
+                <button 
+                  onClick={handleGenerateAiPlan}
+                  disabled={isAiLoading}
+                  className="px-10 py-4 bg-indigo-600/30 hover:bg-indigo-600 border border-indigo-600/50 text-indigo-100 rounded-2xl text-sm font-bold transition-all disabled:opacity-50 uppercase tracking-widest"
+                >
+                  {isAiLoading ? (
+                      <span className="flex items-center"><svg className="animate-spin h-5 w-5 mr-3" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> 正在規劃中...</span>
+                  ) : "生成 AI 企劃建議"}
+                </button>
+            </div>
+          )}
+      </div>
+
+      <button 
+        disabled={isSubmitting}
+        onClick={handleFinalSubmit}
+        className="w-full py-8 rounded-[32px] bg-[#f46011] text-white font-black uppercase tracking-[0.2em] shadow-[0_20px_50px_rgba(244,96,17,0.4)] transition-all hover:scale-[1.01] active:scale-95 disabled:opacity-50 text-xl md:text-2xl mb-24"
+      >
+        {isSubmitting ? '正在提交訂單...' : '確認送出媒合訂購單'}
+      </button>
+    </div>
+  );
+
+  const renderStep5Success = () => (
+    <div className="text-center py-32 animate-fade-in-up">
+        <div className="w-28 h-28 bg-green-500/20 text-green-500 rounded-[40px] flex items-center justify-center mx-auto mb-12 border border-green-500/30 shadow-[0_0_50px_rgba(34,197,94,0.3)] transform rotate-12">
+            <svg className="w-14 h-14" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+        </div>
+        <h2 className="text-4xl md:text-5xl font-black text-white mb-8 tracking-tight">媒合委託已送出！</h2>
+        <p className="text-slate-400 mb-20 leading-relaxed px-4 text-lg font-medium">您的需求已正式發送！供應商將收到包含詳細活動圖文的通知。<br className="hidden md:block"/>您可以隨時在會員中心追蹤最新媒合動態。</p>
+        
+        <div className="space-y-6 max-w-sm mx-auto">
+            <button 
+                onClick={onGoToMemberCenter}
+                className="w-full py-6 bg-indigo-600 hover:bg-indigo-500 text-white rounded-3xl font-black transition-all shadow-[0_15px_40px_rgba(79,70,229,0.3)] uppercase tracking-widest text-base"
+            >
+                前往會員中心
+            </button>
+            <button onClick={onBack} className="w-full py-5 bg-white/5 hover:bg-white/10 text-slate-500 rounded-3xl text-sm transition-all font-bold uppercase tracking-widest">回上一頁</button>
+        </div>
+    </div>
+  );
 
   return (
-    <div ref={topRef} className="max-w-3xl mx-auto pb-24 px-4 relative z-10">
+    <div ref={topRef} className="max-w-4xl mx-auto pb-40 px-4 md:px-6">
       {toastMessage && <Toast message={toastMessage} onClose={() => setToastMessage(null)} />}
-      <a href="tel:0982779903" className="fixed bottom-24 right-4 z-[60] bg-slate-800 text-indigo-400 font-bold py-3 px-4 rounded-full shadow-[0_0_15px_rgba(99,102,241,0.5)] border border-indigo-500/50 flex items-center hover:bg-slate-700 transition-all hover:scale-105">
-        <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
-        聯絡客服
-      </a>
-      {viewingVendor && (
-        <VendorDetailModal
-          vendor={viewingVendor}
-          onClose={() => setViewingVendor(null)}
-          onSelect={(id) => { selectVendor(viewingVendor.category, id); setViewingVendor(null); }}
-          userName={request.name}
+      
+      {activeDetailVendor && (
+        <VendorDetailModal 
+            vendor={activeDetailVendor} 
+            onClose={() => setActiveDetailVendor(null)} 
+            onSelect={(id, pkgId) => selectVendor(activeDetailVendor.category, id, pkgId)}
+            userName={request.name}
+            eventType={request.eventType as EventType} // Pass event type for filtering
         />
       )}
-      {step < 4 && (
-        <div className="flex items-center justify-between mb-8 pt-6">
-          {[1, 2, 3].map(i => (
-            <div key={i} className={`flex items-center ${i < 3 ? 'flex-1' : ''}`}>
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm transition-all border-2 ${step >= i ? 'bg-orange-600 border-orange-500 text-white shadow-[0_0_10px_rgba(249,115,22,0.5)]' : 'bg-slate-800 border-slate-700 text-slate-500'}`}>{i}</div>
-              {i < 3 && <div className={`flex-1 h-1 mx-2 transition-all rounded-full ${step > i ? 'bg-orange-600 shadow-[0_0_5px_rgba(249,115,22,0.5)]' : 'bg-slate-800'}`}></div>}
+
+      {/* Decor Config Modal */}
+      {pendingDecorSelection && (
+          <DecorConfigModal 
+              visible={!!pendingDecorSelection}
+              onClose={() => setPendingDecorSelection(null)}
+              onConfirm={handleDecorConfigConfirm}
+              vendor={MOCK_VENDORS.find(v => v.id === pendingDecorSelection.vendorId) || null}
+              pkg={MOCK_VENDORS.find(v => v.id === pendingDecorSelection.vendorId)?.packages.find(p => p.id === pendingDecorSelection.packageId) || null}
+              eventDate={request.date}
+          />
+      )}
+
+      {step < 5 && (
+        <div className="flex items-center justify-between mb-10 md:mb-16 pt-8 md:pt-12 px-6 md:px-10">
+          {[1, 2, 3, 4].map(i => (
+            <div key={i} className={`flex items-center ${i < 4 ? 'flex-1' : ''}`}>
+              <div className={`w-10 h-10 md:w-12 md:h-12 rounded-full flex items-center justify-center font-black text-sm md:text-base border transition-all duration-500 ${step >= i ? 'bg-primary border-primary text-white shadow-[0_0_20px_rgba(244,96,17,0.5)]' : 'bg-white/5 border-white/10 text-slate-700'}`}>{i}</div>
+              {i < 4 && <div className={`flex-1 h-[3px] mx-2 md:mx-4 rounded-full overflow-hidden bg-white/5`}>
+                  <div className={`h-full bg-primary transition-all duration-700 ${step > i ? 'w-full shadow-[0_0_10px_rgba(244,96,17,1)]' : 'w-0'}`}></div>
+              </div>}
             </div>
           ))}
         </div>
       )}
-      <div className="bg-slate-900 rounded-2xl shadow-2xl p-6 md:p-8 border border-slate-800 relative overflow-hidden">
+
+      <div className="glass-card rounded-[48px] md:rounded-[64px] p-6 md:p-16 border border-white/5 shadow-2xl relative">
+        <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-transparent via-primary/30 to-transparent rounded-full"></div>
         {step === 1 && renderStep1()}
         {step === 2 && renderStep2()}
         {step === 3 && renderStep3()}
-        {step === 4 && renderSummary()}
+        {step === 4 && renderStep4Review()}
+        {step === 5 && renderStep5Success()}
       </div>
-      {step < 4 && (
-        <div className="fixed bottom-0 left-0 right-0 bg-slate-900/90 backdrop-blur-md border-t border-slate-800 shadow-[0_-5px_20px_rgba(0,0,0,0.5)] p-4 z-50">
-          <div className="max-w-3xl mx-auto flex justify-between items-center">
-            <div className="text-slate-200">
-              <span className="text-xs text-slate-500 block uppercase tracking-wider">預估總金額</span>
-              <span className="text-2xl font-black text-orange-500 drop-shadow-sm">${totalPrice.toLocaleString()}</span>
+
+      {step < 5 && (
+        <div className="fixed bottom-0 left-0 right-0 bg-black/80 backdrop-blur-3xl border-t border-white/10 p-6 md:p-8 z-50">
+          <div className="max-w-4xl mx-auto flex justify-between items-center px-4">
+            <div className="flex flex-col">
+                <span className="text-[10px] text-slate-500 font-black block uppercase tracking-widest opacity-60 mb-1">估計總花費</span>
+                <span className="text-3xl md:text-4xl font-black text-primary neon-text tracking-tighter leading-none">${finalTotalPrice.toLocaleString()}</span>
             </div>
-            <div className="space-x-4">
-               {step > 1 && <button onClick={() => setStep(step - 1)} className="px-6 py-2 border border-slate-600 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors">上一步</button>}
-               {step < 3 ? <button onClick={() => { if (step === 1 && !validateStep1()) return; setStep(step + 1) }} className="px-8 py-2 bg-gradient-to-r from-orange-600 to-red-600 text-white rounded-lg hover:shadow-[0_0_15px_rgba(234,88,12,0.5)] transition-all font-bold shadow-md transform active:scale-95">下一步</button> : 
-               <button onClick={handleFinish} className={`px-8 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg hover:shadow-[0_0_15px_rgba(99,102,241,0.5)] transition-all font-bold shadow-md transform active:scale-95 ${selectedVendors.length < neededServices.length ? 'opacity-50 cursor-not-allowed grayscale' : ''}`} disabled={selectedVendors.length < neededServices.length}>確認預約</button>}
+            <div className="flex space-x-4 md:space-x-6 items-center">
+               <button 
+                 onClick={() => {
+                   if (step === 1) {
+                     onBack();
+                   } else {
+                     setStep(step - 1);
+                   }
+                 }} 
+                 className="px-6 md:px-10 py-4 md:py-5 rounded-2xl text-slate-500 font-black hover:text-white transition-all text-xs md:text-sm uppercase tracking-widest"
+               >
+                 回上一頁
+               </button>
+               {step < 4 && (
+                 <button 
+                   onClick={() => { if (step === 1 && !validateStep1()) return; setStep(step + 1) }} 
+                   className="px-8 md:px-14 py-4 md:py-5 rounded-2xl bg-primary text-white font-black text-sm md:text-base uppercase tracking-[0.2em] shadow-xl shadow-primary/20 hover:scale-105 active:scale-95 transition-all"
+                 >
+                   {step === 3 ? '檢視總表' : '下一步'}
+                 </button>
+               )}
             </div>
           </div>
         </div>

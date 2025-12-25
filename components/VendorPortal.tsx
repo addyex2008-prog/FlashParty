@@ -1,542 +1,990 @@
 
-import React, { useState } from 'react';
-import { MOCK_VENDORS, TAIWAN_LOCATIONS } from '../services/mockData';
-import { Vendor, ServiceCategory, EventType } from '../types';
+import React, { useState, useRef } from 'react';
+import { MOCK_VENDORS, TAIWAN_LOCATIONS, MOCK_ORDERS, calculateVendorCostBreakdown } from '../services/mockData';
+import { Vendor, ServiceCategory, EventType, Order, VendorPackage, PackageItem, LocationFeeRule, SpecialDateRule } from '../types';
 
 interface VendorPortalProps {
   onBack: () => void;
 }
 
-const HOURS = Array.from({ length: 24 }, (_, i) => `${i}:00`);
+// Toast Component
+const Toast = ({ message, onClose }: { message: string; onClose: () => void }) => (
+  <div className="fixed top-20 right-5 z-[999] animate-fade-in">
+    <div className="bg-green-600 text-white px-6 py-4 rounded-lg shadow-lg flex items-center gap-3 border border-green-500/50">
+      <div className="flex items-center gap-3">
+        <div className="bg-white text-green-600 rounded-full w-6 h-6 flex shrink-0 items-center justify-center font-bold">✓</div>
+        <span className="font-bold tracking-wide text-sm">{message}</span>
+      </div>
+    </div>
+  </div>
+);
 
-const Icons = {
-  Host: () => <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" /></svg>,
-  Performer: () => <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" /></svg>,
-  Photographer: () => <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>,
-  AV: () => <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /></svg>,
-  Decor: () => <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
-  Florist: () => <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>, 
-  Print: () => <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>,
-  Venue: () => <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>,
-  Food: () => <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 15.546c-.523 0-1.046.151-1.5.454a2.704 2.704 0 01-3 0 2.704 2.704 0 00-3 0 2.704 2.704 0 01-3 0 2.704 2.704 0 00-3 0 2.704 2.704 0 01-3 0 2.701 2.701 0 00-1.5-.454M9 6v2m3-2v2m3-2v2M9 3h.01M12 3h.01M15 3h.01M21 21v-7a2 2 0 00-2-2H5a2 2 0 00-2 2v7h18zm-3-9v-2a2 2 0 00-2-2H8a2 2 0 00-2 2v2h12z" /></svg>
+const CATEGORY_ICONS: Record<ServiceCategory, React.ReactNode> = {
+  [ServiceCategory.PLANNER]: <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>,
+  [ServiceCategory.HOST]: <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m8 0h-3m-3-8V5a3 3 0 116 0v6a3 3 0 01-6 0z" /></svg>,
+  [ServiceCategory.PHOTOGRAPHER]: <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>,
+  [ServiceCategory.BAND]: <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" /></svg>,
+  [ServiceCategory.SINGER]: <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /></svg>,
+  [ServiceCategory.DJ]: <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7" /></svg>,
+  [ServiceCategory.MAGICIAN]: <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a2 2 0 00-1.96 1.414l-.477 2.387a2 2 0 001.569 2.327l.142.028a2 2 0 002.327-1.569l.477-2.387a2 2 0 00-1.414-1.96l-2.387-.477a2 2 0 00-2.327 1.569l-.477 2.387a2 2 0 001.569 2.327l.142.028a2 2 0 002.327-1.569l.477-2.387a2 2 0 00-1.414-1.96" /></svg>,
+  [ServiceCategory.LION_DANCE]: <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
+  [ServiceCategory.BALLOON]: <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>,
+  [ServiceCategory.PT]: <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7" /></svg>,
+  [ServiceCategory.PERFORMER]: <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
+  [ServiceCategory.ACTOR]: <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
+  [ServiceCategory.ACROBATICS]: <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M7 11.5V14m0-2.5v-6a1.5 1.5 0 113 0m-3 6a1.5 1.5 0 00-3 0v2a7.5 7.5 0 0015 0v-5a1.5 1.5 0 013 0m-6-3V11m0-5.5v-1a1.5 1.5 0 013 0v1m0 0V11m0-5.5a1.5 1.5 0 013 0v3m0 0V11" /></svg>,
+  [ServiceCategory.DANCE]: <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
+  [ServiceCategory.DYNAMIC_PHOTO]: <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>,
+  [ServiceCategory.STATIC_PHOTO]: <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>,
+  [ServiceCategory.VIDEOGRAPHY]: <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>,
+  [ServiceCategory.DECOR]: <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-7.714 2.143L11 21l-2.286-6.857L1 12l7.714-2.143L11 3z" /></svg>,
+  [ServiceCategory.VENUE_RENTAL]: <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>,
+  [ServiceCategory.CATERING]: <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>,
+  [ServiceCategory.STAGE_HARDWARE]: <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" /></svg>,
+  [ServiceCategory.CAKE]: <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M21 15.546c-.523 0-1.046.151-1.5.454a2.704 2.704 0 01-3 0 2.703 2.703 0 01-3 0 2.703 2.703 0 01-3 0 2.704 2.704 0 01-1.5-.454V6.454C3.454 6.151 3.977 6 4.5 6s1.046.151 1.5.454a2.704 2.704 0 013 0 2.703 2.703 0 013 0 2.703 2.703 0 013 0 2.704 2.704 0 011.5-.454v9.092z" /></svg>,
+  [ServiceCategory.FLORIST]: <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>,
+  [ServiceCategory.DESIGN_PRINT]: <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>,
+  [ServiceCategory.STAFF]: <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>,
+  [ServiceCategory.OTHER]: <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 12h.01M12 12h.01M19 12h.01M6 12a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0z" /></svg>,
 };
 
-const VENDOR_TYPES = [
-  { 
-    label: '軟體服務', 
-    subcategories: [
-      { id: ServiceCategory.PLANNER, label: '活動統籌師' }, // Moved here
-      { id: ServiceCategory.HOST, label: '主持人' },
-      { id: ServiceCategory.ACTOR, label: '魔術/演員' },
-      { id: ServiceCategory.BAND, label: '樂團' },
-      { id: ServiceCategory.SINGER, label: '歌手' },
-      { id: ServiceCategory.DJ, label: 'DJ' },
-      { id: ServiceCategory.DANCE, label: '舞蹈' },
-      { id: ServiceCategory.BALLOON, label: '互動折氣球' },
-      { id: ServiceCategory.PHOTOGRAPHER, label: '攝影師' },
-      { id: ServiceCategory.VIDEOGRAPHY, label: '影片製作' },
-      { id: ServiceCategory.PT, label: 'PT人員' },
-    ],
-    icon: <Icons.Host />, 
-    color: 'from-pink-500 to-rose-500' 
+const VENDOR_SERVICE_GROUPS = [
+  {
+    label: '軟體服務',
+    color: 'text-primary',
+    items: [
+      ServiceCategory.PLANNER, 
+      ServiceCategory.HOST, 
+      ServiceCategory.PHOTOGRAPHER, 
+      ServiceCategory.BAND, 
+      ServiceCategory.SINGER, 
+      ServiceCategory.DJ, 
+      ServiceCategory.MAGICIAN, 
+      ServiceCategory.LION_DANCE,
+      ServiceCategory.BALLOON,
+      ServiceCategory.PT,
+      ServiceCategory.PERFORMER, 
+      ServiceCategory.ACTOR, 
+      ServiceCategory.ACROBATICS, 
+      ServiceCategory.DANCE, 
+      ServiceCategory.DYNAMIC_PHOTO, 
+      ServiceCategory.STATIC_PHOTO, 
+      ServiceCategory.VIDEOGRAPHY
+    ]
   },
-  { 
-    label: '硬體服務', 
-    subcategories: [
-      { id: ServiceCategory.DECOR, label: '氣球佈置' },
-      { id: ServiceCategory.FLORIST, label: '花藝' },
-      { id: ServiceCategory.VENUE_RENTAL, label: '場地租借' },
-      { id: ServiceCategory.STAGE_HARDWARE, label: '舞台/音響/燈光' }, // Merged
-      { id: ServiceCategory.DESIGN_PRINT, label: '設計/背板輸出' }, // Merged
-      { id: ServiceCategory.CAKE, label: '客製化蛋糕' },
-      { id: ServiceCategory.CATERING, label: '餐點外燴' },
-    ],
-    icon: <Icons.AV />, 
-    color: 'from-blue-500 to-indigo-600' 
+  {
+    label: '硬體與周邊服務',
+    color: 'text-orange-300',
+    items: [
+      ServiceCategory.DECOR, 
+      ServiceCategory.VENUE_RENTAL, 
+      ServiceCategory.CATERING, 
+      ServiceCategory.STAGE_HARDWARE, 
+      ServiceCategory.CAKE, 
+      ServiceCategory.FLORIST, 
+      ServiceCategory.DESIGN_PRINT, 
+      ServiceCategory.STAFF, 
+      ServiceCategory.OTHER
+    ]
   }
 ];
 
-type PortalStep = 'SELECT_TYPE' | 'LOGIN' | 'DASHBOARD';
-type DashboardTab = 'SCHEDULE' | 'PROFILE' | 'PACKAGES';
+type VendorTab = 'SCHEDULE' | 'PACKAGES' | 'ORDERS' | 'PROFILE' | 'FEES';
+
+const VENDOR_TABS: { id: VendorTab; label: string }[] = [
+  { id: 'ORDERS', label: '訂單管理' },
+  { id: 'PACKAGES', label: '方案管理' },
+  { id: 'SCHEDULE', label: '檔期管理' },
+  { id: 'FEES', label: '計費設定' },
+  { id: 'PROFILE', label: '基本資料' },
+];
 
 const VendorPortal: React.FC<VendorPortalProps> = ({ onBack }) => {
-  const [currentStep, setCurrentStep] = useState<PortalStep>('SELECT_TYPE');
-  const [activeTab, setActiveTab] = useState<DashboardTab>('SCHEDULE');
-  const [selectedCategory, setSelectedCategory] = useState<ServiceCategory | null>(null);
-  const [loginId, setLoginId] = useState('');
-  const [loginPwd, setLoginPwd] = useState('');
+  const [currentStep, setCurrentStep] = useState<'CATEGORY_SELECT' | 'LOGIN' | 'DASHBOARD'>('CATEGORY_SELECT');
+  const [selectedCats, setSelectedCats] = useState<ServiceCategory[]>([]);
+  const [activeTab, setActiveTab] = useState<VendorTab>('ORDERS');
   const [vendorData, setVendorData] = useState<Vendor | null>(null);
+  const [dragActive, setDragActive] = useState<{id: string | 'package', active: boolean}>({id: '', active: false});
+  const [selectedOrderForDetail, setSelectedOrderForDetail] = useState<Order | null>(null);
+  const [showSaveToast, setShowSaveToast] = useState(false);
   
-  // Schedule Editing
-  const [currentMonth, setCurrentMonth] = useState(new Date()); 
-  const [editingDate, setEditingDate] = useState<string | null>(null);
+  // 檔案輸入引用
+  const packageImageInputRef = useRef<HTMLInputElement>(null);
+  const profileImageInputRef = useRef<HTMLInputElement>(null);
+  const itemImageInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
-  // Batch
-  const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
-  const [batchWeekdays, setBatchWeekdays] = useState<number[]>([1, 2, 3, 4, 5]); 
-  const [batchStartHour, setBatchStartHour] = useState('0:00'); 
-  const [batchEndHour, setBatchEndHour] = useState('23:00');   
-  const [batchTargetMonths, setBatchTargetMonths] = useState<string[]>([new Date().toISOString().slice(0, 7)]);
-
-  // UI Helper for managing travel fees
-  const [selectedCityForFee, setSelectedCityForFee] = useState('');
-  const [feeInput, setFeeInput] = useState('');
-
-  // Host Surcharge
-  const [selectedEventTypeForSurcharge, setSelectedEventTypeForSurcharge] = useState<string>('');
-  const [surchargeInput, setSurchargeInput] = useState('');
-
-  // Decorator Settings Modal
-  const [isDecorSettingsModalOpen, setIsDecorSettingsModalOpen] = useState(false);
-  const [decorSettingsTab, setDecorSettingsTab] = useState<'LOCATION' | 'TIME' | 'HOLIDAY'>('LOCATION');
+  // 方案管理過濾狀態
+  const [pkgEventTypeFilter, setPkgEventTypeFilter] = useState<EventType | ''>('');
   
-  // Decorator Helper States
-  const [locCity, setLocCity] = useState('');
-  const [locDistrict, setLocDistrict] = useState('');
-  const [locSetupFee, setLocSetupFee] = useState('');
-  const [locTeardownFee, setLocTeardownFee] = useState('');
-  const [locDeliveryFee, setLocDeliveryFee] = useState(''); // New: Delivery Fee Input
-  const [newHolidayDate, setNewHolidayDate] = useState('');
+  // 編輯方案狀態
+  const [isEditingPackage, setIsEditingPackage] = useState(false);
+  const [editingPackage, setEditingPackage] = useState<Partial<VendorPackage>>({
+    name: '',
+    price: 0,
+    soldCount: 0,
+    description: '',
+    imageUrls: ['https://picsum.photos/id/1025/800/600'],
+    includedItems: [],
+    eventTypes: [] // Default empty
+  });
 
-  // Helper for available districts dropdown
-  const availableDistrictsForDecor = locCity ? TAIWAN_LOCATIONS[locCity] : [];
+  // 檔期管理狀態
+  const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [editingDate, setEditingDate] = useState<string | null>(null); // For detailed day edit
+  const [batchStart, setBatchStart] = useState('09:00');
+  const [batchEnd, setBatchEnd] = useState('18:00');
+  const [batchDays, setBatchDays] = useState<number[]>([0, 1, 2, 3, 4, 5, 6]); // 0=Sun, 1=Mon, ...
 
-  const handleCategorySelect = (cat: ServiceCategory) => {
-    setSelectedCategory(cat);
-    setCurrentStep('LOGIN');
-    setLoginId('');
-    setLoginPwd('');
+  // 計費設定狀態 - 新增規則
+  const [newLocationRule, setNewLocationRule] = useState<LocationFeeRule>({ city: '台北市', district: 'all', minSpend: 5000, setupFee: 2000, teardownFee: 2000, deliveryFee: 500 });
+  const [newSpecialDate, setNewSpecialDate] = useState<SpecialDateRule>({ date: '', multiplier: 1.2, note: '' });
+
+  const toggleCategory = (cat: ServiceCategory) => {
+    setSelectedCats(prev => {
+      if (prev.includes(cat)) return prev.filter(c => c !== cat);
+      if (prev.length >= 2) return prev;
+      return [...prev, cat];
+    });
   };
 
   const handleLogin = (mockVendorId?: string) => {
-    let targetId = mockVendorId || loginId;
-    const vendor = MOCK_VENDORS.find(v => v.id === targetId);
+    const vendor = MOCK_VENDORS.find(v => v.id === (mockVendorId || 'v1'));
     if (vendor) {
-      setVendorData(JSON.parse(JSON.stringify(vendor))); 
+      setVendorData(JSON.parse(JSON.stringify(vendor)));
       setCurrentStep('DASHBOARD');
-      setActiveTab('SCHEDULE'); // Reset tab on login
-    } else {
-      alert("找不到此帳號");
     }
   };
 
-  const handleLogout = () => {
-      setVendorData(null); 
-      setCurrentStep('SELECT_TYPE');
+  const handleSave = () => {
+      if (!vendorData) return;
+      const idx = MOCK_VENDORS.findIndex(v => v.id === vendorData.id);
+      if (idx !== -1) {
+          MOCK_VENDORS[idx] = vendorData;
+          setShowSaveToast(true);
+          setTimeout(() => setShowSaveToast(false), 3000);
+      }
   };
 
-  const handleProfileUpdate = (field: keyof Vendor, value: any) => {
+  const handleAcceptOrder = () => {
+      if(!selectedOrderForDetail || !vendorData) return;
+      
+      const orderIndex = MOCK_ORDERS.findIndex(o => o.id === selectedOrderForDetail.id);
+      if(orderIndex !== -1) {
+          const order = MOCK_ORDERS[orderIndex];
+          const selectionIndex = order.selections.findIndex(s => s.vendorId === vendorData.id);
+          
+          if(selectionIndex !== -1) {
+              MOCK_ORDERS[orderIndex].selections[selectionIndex].status = 'ACCEPTED';
+              // Force re-render of order list logic
+              setSelectedOrderForDetail(null);
+              alert('已確認承接訂單！');
+          }
+      }
+  };
+
+  const processImageUpload = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleDrag = (e: React.DragEvent, id: string | 'package') => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === "dragenter" || e.type === "dragover") {
+      setDragActive({id, active: true});
+    } else if (e.type === "dragleave") {
+      setDragActive({id: '', active: false});
+    }
+  };
+
+  const handleDrop = async (e: React.DragEvent, id: string | 'package') => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive({id: '', active: false});
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      const base64 = await processImageUpload(e.dataTransfer.files[0]);
+      if (id === 'package') {
+        setEditingPackage(prev => ({ ...prev, imageUrls: [base64] }));
+      } else {
+        updatePackageItem(id, 'imageUrl', base64);
+      }
+    }
+  };
+
+  const handlePackageImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const base64 = await processImageUpload(e.target.files[0]);
+      setEditingPackage(prev => ({ ...prev, imageUrls: [base64] }));
+    }
+  };
+
+  const handleProfileImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const base64 = await processImageUpload(e.target.files[0]);
+      setVendorData({ ...vendorData!, imageUrl: base64 });
+    }
+  };
+
+  const handleItemImageChange = async (e: React.ChangeEvent<HTMLInputElement>, itemId: string) => {
+    if (e.target.files && e.target.files[0]) {
+      const base64 = await processImageUpload(e.target.files[0]);
+      updatePackageItem(itemId, 'imageUrl', base64);
+    }
+  };
+
+  const handleAddPackageItem = () => {
+    const newItem: PackageItem = {
+      id: Math.random().toString(36).substr(2, 9),
+      name: '',
+      quantity: 1,
+      imageUrl: 'https://picsum.photos/id/10/200/200'
+    };
+    setEditingPackage(prev => ({
+      ...prev,
+      includedItems: [...(prev.includedItems || []), newItem]
+    }));
+  };
+
+  const updatePackageItem = (id: string, field: keyof PackageItem, value: any) => {
+    setEditingPackage(prev => ({
+      ...prev,
+      includedItems: prev.includedItems?.map(item => 
+        item.id === id ? { ...item, [field]: value } : item
+      )
+    }));
+  };
+
+  const removePackageItem = (id: string) => {
+    setEditingPackage(prev => ({
+      ...prev,
+      includedItems: prev.includedItems?.filter(item => item.id !== id)
+    }));
+  };
+
+  const togglePackageEventType = (type: EventType) => {
+    setEditingPackage(prev => {
+      const current = prev.eventTypes || [];
+      if (current.includes(type)) {
+        return { ...prev, eventTypes: current.filter(t => t !== type) };
+      } else {
+        return { ...prev, eventTypes: [...current, type] };
+      }
+    });
+  };
+
+  const savePackage = () => {
     if (!vendorData) return;
-    setVendorData({ ...vendorData, [field]: value });
-    const idx = MOCK_VENDORS.findIndex(v => v.id === vendorData.id);
-    if (idx !== -1) { (MOCK_VENDORS[idx] as any)[field] = value; }
+    const newPkg: VendorPackage = {
+      id: editingPackage.id || Math.random().toString(36).substr(2, 9),
+      name: editingPackage.name || '未命名方案',
+      price: editingPackage.price || 0,
+      soldCount: editingPackage.soldCount || 0,
+      description: editingPackage.description || '',
+      imageUrls: editingPackage.imageUrls || ['https://picsum.photos/id/1025/800/600'],
+      eventTypes: editingPackage.eventTypes || [],
+      includedItems: editingPackage.includedItems || []
+    };
+    const updatedPackages = editingPackage.id 
+      ? vendorData.packages.map(p => p.id === editingPackage.id ? newPkg : p)
+      : [...vendorData.packages, newPkg];
+    setVendorData({ ...vendorData, packages: updatedPackages });
+    setIsEditingPackage(false);
   };
 
-  const togglePauseStatus = () => {
-    if (!vendorData) return;
-    handleProfileUpdate('isPaused', !vendorData.isPaused);
-  };
-
-  const toggleLocation = (city: string) => {
-    if (!vendorData) return;
-    const areas = vendorData.serviceAreas.includes(city)
-      ? vendorData.serviceAreas.filter(c => c !== city)
-      : [...vendorData.serviceAreas, city];
-    handleProfileUpdate('serviceAreas', areas);
-  };
-
-  // --- Decorator Complex Logic Updates ---
-  
-  // 1. Location Rule Add/Remove
+  // Fees Tab Helpers
   const addLocationRule = () => {
     if (!vendorData?.decoratorSettings) return;
-    if (!locCity || !locDistrict || !locSetupFee || !locTeardownFee) return;
-
-    const newRule = {
-        city: locCity,
-        district: locDistrict,
-        setupFee: parseInt(locSetupFee),
-        teardownFee: parseInt(locTeardownFee),
-        deliveryFee: parseInt(locDeliveryFee) || 0, // Include delivery fee
-    };
-
-    // Filter out existing rule for same city+district to overwrite
-    const filteredRules = vendorData.decoratorSettings.locationFeeRules.filter(
-        r => !(r.city === locCity && r.district === locDistrict)
-    );
-
-    handleProfileUpdate('decoratorSettings', {
-        ...vendorData.decoratorSettings,
-        locationFeeRules: [...filteredRules, newRule]
-    });
-    
-    // Reset inputs but keep city for convenience
-    setLocDistrict('');
-    setLocSetupFee('');
-    setLocTeardownFee('');
-    setLocDeliveryFee('');
+    const rules = [...vendorData.decoratorSettings.locationFeeRules, newLocationRule];
+    setVendorData({ ...vendorData, decoratorSettings: { ...vendorData.decoratorSettings, locationFeeRules: rules } });
   };
 
-  const removeLocationRule = (city: string, district: string) => {
+  const removeLocationRule = (idx: number) => {
+    if (!vendorData?.decoratorSettings) return;
+    const rules = vendorData.decoratorSettings.locationFeeRules.filter((_, i) => i !== idx);
+    setVendorData({ ...vendorData, decoratorSettings: { ...vendorData.decoratorSettings, locationFeeRules: rules } });
+  };
+
+  const addSpecialDateRule = () => {
+    if (!vendorData?.decoratorSettings || !newSpecialDate.date) return;
+    const rules = [...(vendorData.decoratorSettings.specialDateModifiers || []), newSpecialDate];
+    setVendorData({ ...vendorData, decoratorSettings: { ...vendorData.decoratorSettings, specialDateModifiers: rules } });
+    setNewSpecialDate({ date: '', multiplier: 1.2, note: '' });
+  };
+  
+  const removeSpecialDateRule = (idx: number) => {
      if (!vendorData?.decoratorSettings) return;
-     const filteredRules = vendorData.decoratorSettings.locationFeeRules.filter(
-        r => !(r.city === city && r.district === district)
-    );
-    handleProfileUpdate('decoratorSettings', {
-        ...vendorData.decoratorSettings,
-        locationFeeRules: filteredRules
-    });
+     const rules = vendorData.decoratorSettings.specialDateModifiers.filter((_, i) => i !== idx);
+     setVendorData({ ...vendorData, decoratorSettings: { ...vendorData.decoratorSettings, specialDateModifiers: rules } });
   };
 
-  // 2. Time Surcharge
-  const updateHourlySurcharge = (hour: number, fee: number) => {
-      if (!vendorData?.decoratorSettings) return;
-      const newSurcharges = { ...vendorData.decoratorSettings.hourlySurcharges };
-      if (fee > 0) newSurcharges[hour] = fee;
-      else delete newSurcharges[hour];
+  // Schedule Tab Helpers
+  const generateHourRange = (start: string, end: string) => {
+    const startH = parseInt(start.split(':')[0]);
+    const endH = parseInt(end.split(':')[0]);
+    const hours = [];
+    for (let h = startH; h <= endH; h++) {
+        hours.push(`${h}:00`);
+    }
+    return hours;
+  };
 
-      handleProfileUpdate('decoratorSettings', {
-          ...vendorData.decoratorSettings,
-          hourlySurcharges: newSurcharges
+  const toggleDayHour = (hour: string) => {
+      if (!vendorData || !editingDate) return;
+      const currentHours = vendorData.availableHours[editingDate] || [];
+      let newHours;
+      if (currentHours.includes(hour)) {
+          newHours = currentHours.filter(h => h !== hour);
+      } else {
+          newHours = [...currentHours, hour].sort((a,b) => parseInt(a) - parseInt(b));
+      }
+      setVendorData({
+          ...vendorData,
+          availableHours: { ...vendorData.availableHours, [editingDate]: newHours }
       });
   };
 
-  // 3. Holiday Logic
-  const toggleFixedHoliday = (dateStr: string) => { // MM-DD
-    if (!vendorData?.decoratorSettings) return;
-    const current = vendorData.decoratorSettings.holidays || [];
-    const newHolidays = current.includes(dateStr) 
-      ? current.filter(d => d !== dateStr)
-      : [...current, dateStr];
-    handleProfileUpdate('decoratorSettings', { ...vendorData.decoratorSettings, holidays: newHolidays });
+  const setDayHours = (hours: string[]) => {
+      if (!vendorData || !editingDate) return;
+      setVendorData({
+          ...vendorData,
+          availableHours: { ...vendorData.availableHours, [editingDate]: hours }
+      });
   };
 
-  const toggleLunarHoliday = (key: string) => {
-    if (!vendorData?.decoratorSettings) return;
-    const current = vendorData.decoratorSettings.lunarHolidays || [];
-    const newLunar = current.includes(key)
-      ? current.filter(k => k !== key)
-      : [...current, key];
-    handleProfileUpdate('decoratorSettings', { ...vendorData.decoratorSettings, lunarHolidays: newLunar });
+  const toggleBatchDay = (day: number) => {
+      setBatchDays(prev => 
+          prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day]
+      );
   };
 
-  // --- Common ---
-  const updateTravelFee = () => {
-      if (!vendorData || !selectedCityForFee || !feeInput) return;
-      const fees = { ...vendorData.travelFees, [selectedCityForFee]: parseInt(feeInput) };
-      handleProfileUpdate('travelFees', fees);
-      setFeeInput('');
-  };
-
-  const removeTravelFee = (city: string) => {
+  const toggleServiceArea = (city: string) => {
       if (!vendorData) return;
-      const fees = { ...vendorData.travelFees };
-      delete fees[city];
-      handleProfileUpdate('travelFees', fees);
-  };
-
-  // Host Surcharge Logic
-  const updateHostSurcharge = () => {
-      if (!vendorData || !vendorData.hostSettings || !selectedEventTypeForSurcharge || !surchargeInput) return;
-      const addons = { ...vendorData.hostSettings.eventTypeAddons, [selectedEventTypeForSurcharge]: parseInt(surchargeInput) };
-      handleProfileUpdate('hostSettings', { ...vendorData.hostSettings, eventTypeAddons: addons });
-      setSurchargeInput('');
-  };
-
-  const removeHostSurcharge = (eType: string) => {
-      if (!vendorData || !vendorData.hostSettings) return;
-      const addons = { ...vendorData.hostSettings.eventTypeAddons };
-      delete addons[eType];
-      handleProfileUpdate('hostSettings', { ...vendorData.hostSettings, eventTypeAddons: addons });
-  };
-
-  // Portfolio Management
-  const handlePortfolioUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!vendorData) return;
-    if (e.target.files && e.target.files.length > 0) {
-        const file = e.target.files[0];
-        const newUrl = URL.createObjectURL(file);
-        const newPortfolio = [...(vendorData.portfolio || []), newUrl];
-        handleProfileUpdate('portfolio', newPortfolio);
-    }
-  };
-
-  const handleVideoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!vendorData) return;
-    if (e.target.files && e.target.files.length > 0) {
-        const file = e.target.files[0];
-        const newUrl = URL.createObjectURL(file);
-        const newVideos = [...(vendorData.portfolioVideos || []), newUrl];
-        handleProfileUpdate('portfolioVideos', newVideos);
-    }
-  };
-
-  const handleAddVideoUrl = (url: string) => {
-     if (!vendorData || !url) return;
-     const newVideos = [...(vendorData.portfolioVideos || []), url];
-     handleProfileUpdate('portfolioVideos', newVideos);
-  };
-
-  const handleRemovePortfolioImage = (indexToRemove: number) => {
-      if (!vendorData) return;
-      const newPortfolio = vendorData.portfolio.filter((_, idx) => idx !== indexToRemove);
-      handleProfileUpdate('portfolio', newPortfolio);
-  };
-
-  const handleRemoveVideo = (indexToRemove: number) => {
-      if (!vendorData) return;
-      const newVideos = (vendorData.portfolioVideos || []).filter((_, idx) => idx !== indexToRemove);
-      handleProfileUpdate('portfolioVideos', newVideos);
-  };
-
-  // Package Video Management
-  const handleAddPackageVideo = (pkgIndex: number, url: string) => {
-      if (!vendorData || !vendorData.packages) return;
-      const newPkgs = [...vendorData.packages];
-      newPkgs[pkgIndex].videoUrl = url; 
-      handleProfileUpdate('packages', newPkgs);
-  };
-
-  const handleEventCheckbox = (pkgIndex: number, eventType: any, checked: boolean) => {
-      if (!vendorData || !vendorData.packages) return;
-      const newPkgs = [...vendorData.packages];
-      const currentEvents = newPkgs[pkgIndex].eventTypes || [];
-      if (checked) {
-          newPkgs[pkgIndex].eventTypes = [...currentEvents, eventType];
+      const current = vendorData.serviceAreas || [];
+      let nextAreas = [];
+      if (current.includes(city)) {
+          nextAreas = current.filter(c => c !== city);
       } else {
-          newPkgs[pkgIndex].eventTypes = currentEvents.filter(e => e !== eventType);
+          nextAreas = [...current, city];
       }
-      handleProfileUpdate('packages', newPkgs);
+      setVendorData({ ...vendorData, serviceAreas: nextAreas });
   };
 
-  // --- Schedule Logic ---
-  const getDaysInMonth = (date: Date) => {
-    const year = date.getFullYear();
-    const month = date.getMonth();
-    const days = new Date(year, month + 1, 0).getDate();
-    return Array.from({ length: days }, (_, i) => {
-      const d = new Date(year, month, i + 1);
-      return {
-        dateString: d.toISOString().split('T')[0],
-        dayOfWeek: d.getDay(), // 0=Sun, 1=Mon
-        dayOfMonth: i + 1
-      };
-    });
-  };
+  const applyBatchSchedule = (scope: 'MONTH' | 'YEAR') => {
+      if (!vendorData) return;
+      const newAvailableHours = { ...vendorData.availableHours };
+      const hoursToAdd = generateHourRange(batchStart, batchEnd);
+      
+      let startDate: Date;
+      let endDate: Date;
 
-  const nextMonth = () => {
-      const next = new Date(currentMonth);
-      next.setMonth(currentMonth.getMonth() + 1);
-      // Limit to 1 year ahead
-      const today = new Date();
-      const limit = new Date(today);
-      limit.setFullYear(today.getFullYear() + 1);
-      if (next <= limit) setCurrentMonth(next);
-  };
-
-  const prevMonth = () => {
-      const prev = new Date(currentMonth);
-      prev.setMonth(currentMonth.getMonth() - 1);
-      // Limit to current month
-      const today = new Date();
-      today.setDate(1); // Compare only Y/M
-      if (prev >= today) setCurrentMonth(prev);
-  };
-
-  const getFutureMonthsList = () => {
-      const list = [];
-      const d = new Date();
-      d.setDate(1);
-      for(let i=0; i<12; i++) {
-          const iso = d.toISOString().slice(0, 7); // YYYY-MM
-          list.push(iso);
-          d.setMonth(d.getMonth() + 1);
+      if (scope === 'MONTH') {
+          // Set to 1st of the displayed month
+          startDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
+          // Set to last day of the displayed month
+          endDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0);
+      } else {
+          // Set to today for YEAR scope
+          startDate = new Date();
+          endDate = new Date();
+          endDate.setFullYear(startDate.getFullYear() + 1);
       }
-      return list;
+
+      let loopDate = new Date(startDate);
+      let appliedCount = 0;
+
+      while (loopDate <= endDate) {
+          if (batchDays.includes(loopDate.getDay())) {
+              const y = loopDate.getFullYear();
+              const m = String(loopDate.getMonth() + 1).padStart(2, '0');
+              const d = String(loopDate.getDate()).padStart(2, '0');
+              const dateStr = `${y}-${m}-${d}`;
+              
+              newAvailableHours[dateStr] = hoursToAdd;
+              appliedCount++;
+          }
+          loopDate.setDate(loopDate.getDate() + 1);
+      }
+
+      setVendorData({ ...vendorData, availableHours: newAvailableHours });
+      alert(`已成功套用標準時段 (${batchStart}-${batchEnd}) 至${scope === 'MONTH' ? '本月' : '未來一年'}！共更新了 ${appliedCount} 天`);
   };
 
-  const handleHourToggle = (dateStr: string, hourStr: string) => {
-    if (!vendorData) return;
-    const currentHours = vendorData.availableHours[dateStr] || [];
-    const newHours = currentHours.includes(hourStr)
-      ? currentHours.filter(h => h !== hourStr)
-      : [...currentHours, hourStr];
-    
-    handleProfileUpdate('availableHours', {
-      ...vendorData.availableHours,
-      [dateStr]: newHours.sort((a, b) => parseInt(a) - parseInt(b))
-    });
-  };
-
-  const handleBatchApply = () => {
-    if (!vendorData) return;
-    const newAvailability = { ...vendorData.availableHours };
-    
-    // Generate hours range
-    const startH = parseInt(batchStartHour.split(':')[0]);
-    const endH = parseInt(batchEndHour.split(':')[0]);
-    const hoursToAdd: string[] = [];
-    for(let h = startH; h <= endH; h++) {
-        hoursToAdd.push(`${h}:00`);
-    }
-
-    batchTargetMonths.forEach(monthStr => { // monthStr is YYYY-MM
-        const [y, m] = monthStr.split('-').map(Number);
-        const daysInMonth = new Date(y, m, 0).getDate();
-        
-        for(let d=1; d<=daysInMonth; d++) {
-            const dateObj = new Date(y, m - 1, d);
-            const dateStr = dateObj.toISOString().split('T')[0];
-            const dayOfWeek = dateObj.getDay(); // 0-6
-            
-            // Check if this weekday matches selection
-            if(batchWeekdays.includes(dayOfWeek)) {
-                newAvailability[dateStr] = [...hoursToAdd];
-            }
-        }
-    });
-
-    handleProfileUpdate('availableHours', newAvailability);
-    setIsBatchModalOpen(false);
-  };
-  
-  // --- Render Sections ---
-
-  const renderPackagesTab = () => {
-    if (!vendorData || !vendorData.decoratorSettings) return null;
-    
-    return (
-        <div className="bg-slate-900 rounded-xl border border-slate-800 shadow-lg p-6 max-w-4xl mx-auto animate-fade-in">
-            <div className="flex justify-between items-center mb-6 border-b border-slate-800 pb-2">
-                <h3 className="text-xl font-bold text-white">方案與報價管理</h3>
-                <button 
-                  onClick={() => setIsDecorSettingsModalOpen(true)}
-                  className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg flex items-center shadow-lg transition-transform hover:scale-105"
+  const renderCategorySelect = () => (
+    <div className="max-w-4xl mx-auto pt-20 px-6 animate-fade-in relative z-10 pb-48">
+      <div className="text-center mb-10">
+        <h2 className="text-3xl md:text-5xl font-black text-white mb-4 tracking-tighter">我是供應商夥伴</h2>
+        <p className="text-slate-500 font-bold uppercase tracking-widest text-xs md:text-sm">請選擇您的服務類別以進行登入或註冊</p>
+      </div>
+      <div className="space-y-12">
+        {VENDOR_SERVICE_GROUPS.map((group, idx) => (
+          <div key={idx} className="space-y-6">
+            <h3 className={`text-sm md:text-base font-black ${group.color} uppercase tracking-widest ml-2`}>{group.label}</h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {group.items.map(cat => (
+                <button
+                  key={cat}
+                  onClick={() => toggleCategory(cat)}
+                  className={`p-4 md:p-6 rounded-3xl border-2 transition-all flex flex-col items-center gap-4 group ${
+                    selectedCats.includes(cat)
+                      ? 'border-primary bg-primary/20 text-white shadow-[0_0_20px_rgba(244,96,17,0.3)]'
+                      : 'border-white/5 bg-white/5 text-slate-500 hover:border-white/20'
+                  }`}
                 >
-                    <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                    基礎報價設定
+                  <div className={`transition-colors ${selectedCats.includes(cat) ? 'text-white' : 'text-slate-600 group-hover:text-primary'}`}>
+                    {CATEGORY_ICONS[cat] || <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M12 4v16m8-8H4" /></svg>}
+                  </div>
+                  <span className="font-black text-[10px] md:text-sm tracking-widest uppercase text-center">
+                    {cat}
+                  </span>
                 </button>
+              ))}
             </div>
-            
-            {/* 1. Package Management */}
-            <div className="mb-10">
-                <h4 className="font-bold text-orange-400 mb-4 flex items-center">
-                    <span className="bg-orange-900/50 p-1 rounded mr-2">📦</span> 服務方案
-                </h4>
-                <div className="space-y-6">
-                    {vendorData.packages.map((pkg, idx) => (
-                        <div key={pkg.id} className="bg-slate-800 p-5 rounded-lg border border-slate-700 shadow-sm">
-                            <div className="flex flex-col md:flex-row gap-4 mb-4">
-                                <div className="flex-1">
-                                    <label className="block text-xs text-slate-400 mb-1">方案名稱</label>
-                                    <input 
-                                        value={pkg.name} 
-                                        onChange={(e) => {
-                                            const newPkgs = [...vendorData.packages];
-                                            newPkgs[idx].name = e.target.value;
-                                            handleProfileUpdate('packages', newPkgs);
-                                        }}
-                                        className="w-full bg-slate-900 border-slate-600 rounded px-3 py-2 font-bold text-white"
-                                    />
-                                </div>
-                                <div className="w-full md:w-40">
-                                    <label className="block text-xs text-slate-400 mb-1">方案價格</label>
-                                    <div className="relative">
-                                        <span className="absolute left-3 top-2 text-slate-500">$</span>
-                                        <input 
-                                            type="number"
-                                            value={pkg.price} 
-                                            onChange={(e) => {
-                                                const newPkgs = [...vendorData.packages];
-                                                newPkgs[idx].price = parseInt(e.target.value);
-                                                handleProfileUpdate('packages', newPkgs);
-                                            }}
-                                            className="w-full bg-slate-900 border-slate-600 rounded pl-6 pr-3 py-2 text-orange-400 font-bold text-right"
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <div className="mb-4">
-                                <label className="block text-xs text-slate-400 mb-1">方案描述</label>
-                                <textarea 
-                                    value={pkg.description}
-                                    onChange={(e) => {
-                                        const newPkgs = [...vendorData.packages];
-                                        newPkgs[idx].description = e.target.value;
-                                        handleProfileUpdate('packages', newPkgs);
-                                    }}
-                                    className="w-full bg-slate-900 border-slate-600 rounded p-2 text-sm text-slate-300"
-                                    rows={3}
-                                />
-                            </div>
+          </div>
+        ))}
+      </div>
+      <div className="mt-12 flex justify-center">
+        <button
+          onClick={() => setCurrentStep('LOGIN')}
+          disabled={selectedCats.length === 0}
+          className="px-8 py-4 rounded-full bg-primary text-white font-black text-sm md:text-lg uppercase tracking-[0.2em] shadow-2xl shadow-primary/30 hover:scale-105 active:scale-95 disabled:opacity-20 transition-all"
+        >
+          下一步：進入登入頁面
+        </button>
+      </div>
+    </div>
+  );
 
-                            {/* Event Categories */}
-                            <div className="mb-4 bg-slate-900/50 p-3 rounded border border-slate-700/50">
-                                <label className="block text-xs text-slate-400 mb-2">適用活動類型 (勾選後將推薦給該類客戶)</label>
-                                <div className="flex flex-wrap gap-2 max-h-24 overflow-y-auto custom-scrollbar">
-                                    {Object.values(EventType).map((etype: any) => (
-                                        <label key={etype} className="flex items-center space-x-1 bg-slate-800 px-2 py-1 rounded border border-slate-700 cursor-pointer hover:bg-slate-700">
-                                            <input 
-                                                type="checkbox" 
-                                                checked={pkg.eventTypes?.includes(etype) || false}
-                                                onChange={(e) => handleEventCheckbox(idx, etype, e.target.checked)}
-                                                className="rounded bg-slate-900 border-slate-600 text-orange-500"
-                                            />
-                                            <span className="text-[10px] text-slate-300">{etype}</span>
-                                        </label>
-                                    ))}
-                                </div>
-                            </div>
+  const renderLogin = () => (
+    <div className="max-w-md mx-auto pt-32 px-6 animate-fade-in text-center relative z-10 pb-48">
+      <div className="glass-card p-8 md:p-12 rounded-[48px] border border-white/10 shadow-2xl">
+        <h2 className="text-2xl md:text-3xl font-black text-white mb-8 tracking-tight">合作夥伴登入</h2>
+        <div className="space-y-6">
+          <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mb-8">請選擇一個測試帳號登入系統</p>
+          {MOCK_VENDORS.filter(v => selectedCats.includes(v.category)).map(vendor => (
+            <button
+              key={vendor.id}
+              onClick={() => handleLogin(vendor.id)}
+              className="w-full p-4 md:p-6 rounded-2xl bg-white/5 border border-white/10 flex items-center gap-4 hover:border-primary/50 transition-all group"
+            >
+              <img src={vendor.imageUrl} className="w-12 h-12 md:w-16 md:h-16 rounded-xl object-cover" />
+              <div className="text-left">
+                <div className="text-white font-black text-base md:text-lg group-hover:text-primary transition-colors">{vendor.name}</div>
+                <div className="text-slate-600 text-xs font-bold uppercase">{vendor.category}</div>
+              </div>
+            </button>
+          ))}
+          <button
+            onClick={() => handleLogin('v10')}
+            className="w-full py-6 mt-4 rounded-2xl border border-white/10 text-slate-500 text-sm md:text-base font-black uppercase tracking-widest hover:text-white hover:bg-white/5 transition-all"
+          >
+            進入測試 (迪爾氣球佈置)
+          </button>
+        </div>
+      </div>
+      <button 
+        onClick={() => setCurrentStep('CATEGORY_SELECT')}
+        className="mt-10 text-slate-600 hover:text-white text-xs md:text-sm font-black uppercase tracking-widest transition-colors"
+      >
+        ← 返回重新選擇類別
+      </button>
+    </div>
+  );
 
-                            {/* Package Media */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-xs text-slate-400 mb-2">方案照片與影片</label>
-                                    <div className="flex flex-wrap gap-2">
-                                        {pkg.imageUrls.map((url, imgIdx) => (
-                                            <img key={imgIdx} src={url} className="w-16 h-16 object-cover rounded border border-slate-600" />
-                                        ))}
-                                        <label className="w-16 h-16 border border-dashed border-slate-600 rounded flex items-center justify-center cursor-pointer hover:bg-slate-700">
-                                            <span className="text-xl text-slate-500">+</span>
-                                            <input type="file" className="hidden" accept="image/*" onChange={(e) => {
-                                                if(e.target.files?.[0]) {
-                                                    const newPkgs = [...vendorData.packages];
-                                                    newPkgs[idx].imageUrls.push(URL.createObjectURL(e.target.files[0]));
-                                                    handleProfileUpdate('packages', newPkgs);
-                                                }
-                                            }}/>
-                                        </label>
-                                    </div>
-                                </div>
-                                <div>
-                                    <label className="block text-xs text-slate-400 mb-2">影片連結 (YouTube/Vimeo)</label>
-                                    <input 
-                                        type="text" 
-                                        placeholder="https://youtube.com/..." 
-                                        value={pkg.videoUrl || ''}
-                                        onChange={(e) => handleAddPackageVideo(idx, e.target.value)}
-                                        className="w-full bg-slate-900 border-slate-600 rounded p-2 text-xs text-blue-400"
-                                    />
-                                    {pkg.videoUrl && <a href={pkg.videoUrl} target="_blank" className="text-xs text-slate-500 hover:text-white mt-1 block">預覽影片</a>}
-                                </div>
-                            </div>
+  const renderOrderDetailModal = () => {
+      if(!selectedOrderForDetail || !vendorData) return null;
+      const selection = selectedOrderForDetail.selections.find(s => s.vendorId === vendorData.id);
+      const pkg = vendorData.packages.find(p => p.id === selection?.packageId);
+      const breakdown = calculateVendorCostBreakdown(vendorData, selectedOrderForDetail.userRequest, selectedOrderForDetail.durationHours, selection?.packageId, selection?.options);
 
-                            <div className="mt-4 flex justify-end">
-                                <button className="text-red-400 text-xs hover:text-red-300 px-3 py-1 border border-red-900 rounded hover:bg-red-900/20">刪除此方案</button>
+      return (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/90 backdrop-blur-md" onClick={() => setSelectedOrderForDetail(null)}></div>
+            <div className="relative bg-[#0a0a0a] border border-white/10 rounded-[32px] p-8 w-full max-w-lg shadow-[0_0_80px_rgba(244,96,17,0.3)] animate-fade-in-up overflow-y-auto max-h-[90vh]">
+                <div className="flex justify-between items-center mb-8 border-b border-white/10 pb-4">
+                    <h4 className="text-xl font-black text-white flex items-center">
+                        <span className="w-1.5 h-6 bg-primary mr-3 rounded-full"></span>
+                        訂單詳細內容確認
+                    </h4>
+                    <button onClick={() => setSelectedOrderForDetail(null)} className="text-slate-500 hover:text-white">✕</button>
+                </div>
+
+                <div className="space-y-6 mb-8">
+                    <div className="bg-white/5 p-4 rounded-2xl">
+                        <span className="text-xs text-slate-500 font-bold block mb-1">客戶資料</span>
+                        <div className="text-white font-bold text-lg">{selectedOrderForDetail.userRequest.name}</div>
+                        <div className="text-primary font-bold">{selectedOrderForDetail.userRequest.phone}</div>
+                    </div>
+                    <div className="bg-white/5 p-4 rounded-2xl">
+                        <span className="text-xs text-slate-500 font-bold block mb-1">活動資訊</span>
+                        <div className="text-white font-bold">{selectedOrderForDetail.userRequest.date} ({selectedOrderForDetail.userRequest.startTime} - {selectedOrderForDetail.userRequest.endTime})</div>
+                        <div className="text-slate-400 text-sm mt-1">{selectedOrderForDetail.userRequest.city}{selectedOrderForDetail.userRequest.district} {selectedOrderForDetail.userRequest.venueName}</div>
+                        <div className="text-slate-500 text-xs mt-1">{selectedOrderForDetail.userRequest.address}</div>
+                    </div>
+                    <div className="bg-white/5 p-4 rounded-2xl border border-primary/20">
+                        <span className="text-xs text-slate-500 font-bold block mb-1">您的服務項目</span>
+                        <div className="text-white font-bold text-lg">{pkg?.name || '基本服務'}</div>
+                        {selection?.options?.deliveryMethod && <div className="text-primary text-sm font-bold mt-1">方式: {selection.options.deliveryMethod === 'setup' ? '專人佈置' : (selection.options.deliveryMethod === 'delivery' ? '外送' : '自取')}</div>}
+                        {selection?.options?.pickupTime && <div className="text-slate-400 text-sm font-bold">預計時間: {selection.options.pickupTime}</div>}
+                        
+                        <div className="mt-4 pt-4 border-t border-white/10 space-y-2">
+                            {breakdown.items.map((item, idx) => (
+                                <div key={idx} className="flex justify-between text-sm">
+                                    <span className="text-slate-400">{item.label}</span>
+                                    <span className="text-white font-bold">${item.amount.toLocaleString()}</span>
+                                </div>
+                            ))}
+                            <div className="flex justify-between text-lg font-black text-primary pt-2 border-t border-white/10 mt-2">
+                                <span>總計</span>
+                                <span>${breakdown.total.toLocaleString()}</span>
                             </div>
                         </div>
-                    ))}
-                    <button className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded border border-dashed border-slate-600 text-sm font-bold transition-colors">
-                        + 新增服務方案
-                    </button>
+                    </div>
+                </div>
+
+                <div className="flex gap-4">
+                    <button onClick={() => setSelectedOrderForDetail(null)} className="flex-1 py-4 bg-white/5 hover:bg-white/10 text-slate-400 font-bold rounded-xl transition-all">再考慮</button>
+                    <button onClick={handleAcceptOrder} className="flex-1 py-4 bg-primary text-white font-black rounded-xl shadow-lg hover:bg-[#d9520e] transition-all">確認承接</button>
+                </div>
+            </div>
+        </div>
+      );
+  };
+
+  const renderPackageEditor = () => (
+    <div className="space-y-8 animate-fade-in">
+        <div className="flex justify-between items-center border-b border-white/10 pb-6">
+            <h3 className="text-2xl font-black text-white">{editingPackage.id ? '編輯方案' : '新增方案'}</h3>
+            <button onClick={() => setIsEditingPackage(false)} className="text-slate-500 hover:text-white font-bold">✕ 取消</button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="space-y-6">
+                 {/* Basic Info */}
+                 <div>
+                     <label className="block text-xs font-bold text-slate-500 uppercase mb-2">方案名稱</label>
+                     <input 
+                        type="text" 
+                        value={editingPackage.name} 
+                        onChange={e => setEditingPackage({...editingPackage, name: e.target.value})}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-white focus:border-primary outline-none font-bold"
+                     />
+                 </div>
+                 <div className="grid grid-cols-2 gap-4">
+                     <div>
+                         <label className="block text-xs font-bold text-slate-500 uppercase mb-2">價格</label>
+                         <input 
+                            type="number" 
+                            value={editingPackage.price} 
+                            onChange={e => setEditingPackage({...editingPackage, price: Number(e.target.value)})}
+                            className="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-white focus:border-primary outline-none font-bold"
+                         />
+                     </div>
+                     <div>
+                         <label className="block text-xs font-bold text-slate-500 uppercase mb-2">已售出數量 (系統自動計算)</label>
+                         <input 
+                            type="number" 
+                            value={editingPackage.soldCount} 
+                            disabled
+                            className="w-full bg-black/20 border border-white/5 rounded-xl p-4 text-slate-400 font-bold cursor-not-allowed"
+                         />
+                     </div>
+                     {/* Event Types */}
+                     <div className="col-span-2">
+                        <label className="block text-xs font-bold text-slate-500 uppercase mb-2">適用活動類型</label>
+                        <div className="flex flex-wrap gap-2">
+                            {Object.values(EventType).map(type => (
+                                <button
+                                    key={type}
+                                    onClick={() => togglePackageEventType(type)}
+                                    className={`px-3 py-1 rounded-full text-[10px] font-bold border transition-all ${
+                                        editingPackage.eventTypes?.includes(type) 
+                                        ? 'bg-primary text-white border-primary' 
+                                        : 'bg-transparent text-slate-500 border-white/10 hover:border-white/30'
+                                    }`}
+                                >
+                                    {type}
+                                </button>
+                            ))}
+                        </div>
+                     </div>
+                 </div>
+                 <div>
+                     <label className="block text-xs font-bold text-slate-500 uppercase mb-2">方案描述</label>
+                     <textarea 
+                        value={editingPackage.description} 
+                        onChange={e => setEditingPackage({...editingPackage, description: e.target.value})}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-white focus:border-primary outline-none h-32"
+                     />
+                 </div>
+            </div>
+
+            <div className="space-y-6">
+                {/* Images */}
+                <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-2">方案封面圖</label>
+                    <div 
+                        className={`aspect-video rounded-xl border-2 border-dashed flex items-center justify-center relative overflow-hidden group cursor-pointer ${dragActive.id === 'package' ? 'border-primary bg-primary/10' : 'border-white/10 bg-white/5'}`}
+                        onDragEnter={(e) => handleDrag(e, 'package')}
+                        onDragLeave={(e) => handleDrag(e, 'package')}
+                        onDragOver={(e) => handleDrag(e, 'package')}
+                        onDrop={(e) => handleDrop(e, 'package')}
+                        onClick={() => packageImageInputRef.current?.click()}
+                    >
+                        {editingPackage.imageUrls && editingPackage.imageUrls[0] ? (
+                            <img src={editingPackage.imageUrls[0]} className="w-full h-full object-cover" />
+                        ) : (
+                            <span className="text-slate-500 font-bold">點擊或拖曳上傳圖片</span>
+                        )}
+                        <input type="file" ref={packageImageInputRef} onChange={handlePackageImageChange} className="hidden" accept="image/*" />
+                    </div>
+                </div>
+
+                {/* Included Items */}
+                <div>
+                     <div className="flex justify-between items-center mb-4">
+                        <label className="text-xs font-bold text-slate-500 uppercase">包含項目</label>
+                        <button onClick={handleAddPackageItem} className="text-[10px] bg-white/10 px-3 py-1 rounded text-white hover:bg-primary transition-colors font-bold">+ 新增項目</button>
+                     </div>
+                     <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                         {editingPackage.includedItems?.map((item, idx) => (
+                             <div key={item.id} className="flex gap-3 items-center bg-white/5 p-3 rounded-xl border border-white/5">
+                                 <div 
+                                    className="w-12 h-12 rounded-lg bg-black shrink-0 overflow-hidden relative group cursor-pointer"
+                                    onClick={() => itemImageInputRefs.current[item.id]?.click()}
+                                 >
+                                     <img src={item.imageUrl} className="w-full h-full object-cover" />
+                                     <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                         <span className="text-[8px] text-white">更換</span>
+                                     </div>
+                                     <input 
+                                        type="file" 
+                                        ref={(el) => { itemImageInputRefs.current[item.id] = el; }}
+                                        onChange={(e) => handleItemImageChange(e, item.id)}
+                                        className="hidden" 
+                                        accept="image/*"
+                                     />
+                                 </div>
+                                 <div className="flex-1 space-y-2">
+                                     <input 
+                                        type="text" 
+                                        value={item.name} 
+                                        onChange={(e) => updatePackageItem(item.id, 'name', e.target.value)}
+                                        placeholder="項目名稱"
+                                        className="w-full bg-transparent border-b border-white/10 text-sm text-white focus:border-primary outline-none pb-1"
+                                     />
+                                     <div className="flex items-center gap-2">
+                                         <span className="text-[10px] text-slate-500">數量</span>
+                                         <input 
+                                            type="number" 
+                                            value={item.quantity} 
+                                            onChange={(e) => updatePackageItem(item.id, 'quantity', parseInt(e.target.value))}
+                                            className="w-16 bg-transparent border-b border-white/10 text-sm text-white focus:border-primary outline-none text-center pb-1"
+                                         />
+                                     </div>
+                                 </div>
+                                 <button onClick={() => removePackageItem(item.id)} className="text-slate-500 hover:text-red-500">✕</button>
+                             </div>
+                         ))}
+                     </div>
+                </div>
+            </div>
+        </div>
+
+        <div className="pt-8 border-t border-white/10 flex justify-end gap-4">
+            <button onClick={() => setIsEditingPackage(false)} className="px-8 py-3 rounded-xl border border-white/10 text-slate-400 font-bold hover:text-white transition-all">取消</button>
+            <button onClick={savePackage} className="px-8 py-3 rounded-xl bg-primary text-white font-black shadow-lg hover:shadow-primary/30 transition-all">儲存方案</button>
+        </div>
+    </div>
+  );
+
+  const renderScheduleTab = () => (
+    <div className="space-y-8 animate-fade-in">
+        <div className="flex flex-col md:flex-row gap-8">
+            {/* Batch Settings */}
+            <div className="md:w-1/3 space-y-6">
+                <div className="bg-white/5 p-6 rounded-3xl border border-white/5">
+                    <h4 className="text-lg font-black text-white mb-6 flex items-center">
+                        <span className="w-1.5 h-6 bg-primary mr-3 rounded-full"></span>
+                        批次設定檔期
+                    </h4>
+                    
+                    <div className="space-y-4">
+                        <div>
+                            <label className="block text-xs font-bold text-slate-500 uppercase mb-2">每日可接單時段</label>
+                            <div className="flex gap-4 items-center">
+                                <input type="time" value={batchStart} onChange={(e) => setBatchStart(e.target.value)} className="bg-black/30 border border-white/10 rounded-xl p-3 text-white font-bold outline-none focus:border-primary flex-1" />
+                                <span className="text-slate-500">to</span>
+                                <input type="time" value={batchEnd} onChange={(e) => setBatchEnd(e.target.value)} className="bg-black/30 border border-white/10 rounded-xl p-3 text-white font-bold outline-none focus:border-primary flex-1" />
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="block text-xs font-bold text-slate-500 uppercase mb-2">套用星期</label>
+                            <div className="flex justify-between">
+                                {['日', '一', '二', '三', '四', '五', '六'].map((d, i) => (
+                                    <button 
+                                        key={i}
+                                        onClick={() => toggleBatchDay(i)}
+                                        className={`w-8 h-8 rounded-full text-xs font-black transition-all ${batchDays.includes(i) ? 'bg-primary text-white' : 'bg-white/5 text-slate-500'}`}
+                                    >
+                                        {d}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="pt-4 flex flex-col gap-3">
+                            <button onClick={() => applyBatchSchedule('MONTH')} className="w-full py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl font-bold text-xs uppercase tracking-widest">
+                                套用到本月
+                            </button>
+                            <button onClick={() => applyBatchSchedule('YEAR')} className="w-full py-3 bg-primary text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-lg">
+                                套用到未來一年
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="bg-white/5 p-6 rounded-3xl border border-white/5">
+                    <h4 className="text-lg font-black text-white mb-6 flex items-center">
+                        <span className="w-1.5 h-6 bg-green-500 mr-3 rounded-full"></span>
+                        服務縣市設定
+                    </h4>
+                    <div className="flex flex-wrap gap-2 max-h-[300px] overflow-y-auto custom-scrollbar">
+                        {Object.keys(TAIWAN_LOCATIONS).map(city => (
+                            <button 
+                                key={city}
+                                onClick={() => toggleServiceArea(city)}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${vendorData?.serviceAreas.includes(city) ? 'bg-green-500/20 border-green-500 text-green-400' : 'bg-transparent border-white/10 text-slate-500 hover:border-white/30'}`}
+                            >
+                                {city}
+                            </button>
+                        ))}
+                    </div>
                 </div>
             </div>
 
-            <hr className="border-slate-800 my-8" />
+            {/* Calendar Preview */}
+            <div className="flex-1 bg-white/5 p-6 rounded-3xl border border-white/5">
+                <div className="flex justify-between items-center mb-6">
+                    <h4 className="text-lg font-black text-white">{currentMonth.getFullYear()}年 {currentMonth.getMonth()+1}月</h4>
+                    <div className="flex gap-2">
+                        <button onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth()-1, 1))} className="p-2 hover:bg-white/10 rounded-full text-white">←</button>
+                        <button onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth()+1, 1))} className="p-2 hover:bg-white/10 rounded-full text-white">→</button>
+                    </div>
+                </div>
+                
+                <div className="grid grid-cols-7 gap-2 mb-2">
+                    {['日', '一', '二', '三', '四', '五', '六'].map(d => (
+                        <div key={d} className="text-center text-slate-500 text-xs font-bold py-2">{d}</div>
+                    ))}
+                </div>
+
+                <div className="grid grid-cols-7 gap-2">
+                    {Array.from({length: new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1).getDay()}).map((_, i) => (
+                        <div key={`empty-${i}`} className="aspect-square"></div>
+                    ))}
+                    {Array.from({length: new Date(currentMonth.getFullYear(), currentMonth.getMonth()+1, 0).getDate()}).map((_, i) => {
+                        const d = i + 1;
+                        const dateStr = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth()+1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                        const hours = vendorData?.availableHours[dateStr] || [];
+                        const isFullDay = hours.length >= 8;
+                        const isPartial = hours.length > 0 && hours.length < 8;
+                        
+                        return (
+                            <div 
+                                key={d} 
+                                onClick={() => setEditingDate(dateStr)}
+                                className={`aspect-square rounded-xl border border-white/5 p-1 cursor-pointer hover:border-primary/50 transition-all flex flex-col justify-between ${editingDate === dateStr ? 'ring-2 ring-primary bg-primary/20' : 'bg-black/20'}`}
+                            >
+                                <span className="text-xs font-bold text-slate-400 ml-1">{d}</span>
+                                <div className="flex justify-end pr-1 pb-1">
+                                    {isFullDay && <div className="w-2 h-2 rounded-full bg-green-500"></div>}
+                                    {isPartial && <div className="w-2 h-2 rounded-full bg-yellow-500"></div>}
+                                    {!isFullDay && !isPartial && <div className="w-2 h-2 rounded-full bg-red-500/30"></div>}
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
+        </div>
+
+        {/* Day Detail Modal/Panel */}
+        {editingDate && (
+            <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+                <div className="absolute inset-0 bg-black/90 backdrop-blur-md" onClick={() => setEditingDate(null)}></div>
+                <div className="relative bg-[#0a0a0a] border border-white/10 rounded-3xl p-8 w-full max-w-lg shadow-2xl">
+                    <div className="flex justify-between items-center mb-6">
+                        <h4 className="text-xl font-black text-white">{editingDate} 檔期設定</h4>
+                        <button onClick={() => setEditingDate(null)} className="text-slate-500 hover:text-white">✕</button>
+                    </div>
+                    
+                    <div className="grid grid-cols-4 gap-3 mb-8">
+                        {Array.from({length: 24}).map((_, i) => {
+                            const h = `${i}:00`;
+                            const isSelected = vendorData?.availableHours[editingDate]?.includes(h);
+                            return (
+                                <button 
+                                    key={i}
+                                    onClick={() => toggleDayHour(h)}
+                                    className={`py-2 rounded-lg text-xs font-bold transition-all ${isSelected ? 'bg-primary text-white shadow-lg' : 'bg-white/5 text-slate-500 hover:bg-white/10'}`}
+                                >
+                                    {h}
+                                </button>
+                            );
+                        })}
+                    </div>
+                    
+                    <div className="flex gap-4">
+                        <button onClick={() => setDayHours([])} className="flex-1 py-3 bg-red-500/10 text-red-500 rounded-xl font-bold uppercase tracking-widest hover:bg-red-500/20">
+                            全天休假
+                        </button>
+                        <button onClick={() => setDayHours(generateHourRange('09:00', '21:00'))} className="flex-1 py-3 bg-green-500/10 text-green-500 rounded-xl font-bold uppercase tracking-widest hover:bg-green-500/20">
+                            全天開放
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
+    </div>
+  );
+
+  const renderFeesTab = () => {
+    if (!vendorData) return null;
+    return (
+        <div className="space-y-8 animate-fade-in">
+             <div className="bg-white/5 p-8 rounded-3xl border border-white/5">
+                <h4 className="text-xl font-black text-white mb-8 flex items-center">
+                     <span className="w-2 h-8 bg-[#f46011] mr-4 rounded-full"></span>
+                     {vendorData.category === ServiceCategory.DECOR ? '場地佈置計費規則' : '基本計費規則'}
+                </h4>
+
+                {vendorData.category === ServiceCategory.DECOR && vendorData.decoratorSettings && (
+                    <div className="space-y-10">
+                        {/* Location Fees */}
+                        <div>
+                            <div className="flex justify-between items-center mb-4">
+                                <h5 className="text-sm font-bold text-slate-400 uppercase tracking-widest">地區車馬費與低消</h5>
+                            </div>
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left border-collapse">
+                                    <thead>
+                                        <tr className="border-b border-white/10 text-xs text-slate-500 uppercase">
+                                            <th className="py-3 px-4">縣市</th>
+                                            <th className="py-3 px-4">區域</th>
+                                            <th className="py-3 px-4">低消</th>
+                                            <th className="py-3 px-4">佈置費</th>
+                                            <th className="py-3 px-4">撤場費</th>
+                                            <th className="py-3 px-4">操作</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="text-sm">
+                                        {vendorData.decoratorSettings.locationFeeRules.map((rule, idx) => (
+                                            <tr key={idx} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                                                <td className="py-3 px-4 text-white font-bold">{rule.city}</td>
+                                                <td className="py-3 px-4 text-slate-300">{rule.district === 'all' ? '全區' : rule.district}</td>
+                                                <td className="py-3 px-4 text-slate-300">${rule.minSpend}</td>
+                                                <td className="py-3 px-4 text-slate-300">${rule.setupFee}</td>
+                                                <td className="py-3 px-4 text-slate-300">${rule.teardownFee}</td>
+                                                <td className="py-3 px-4">
+                                                    <button onClick={() => removeLocationRule(idx)} className="text-red-500 hover:text-white">✕</button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                        {/* Add New Row */}
+                                        <tr className="bg-white/5">
+                                            <td className="p-2">
+                                                <select 
+                                                    value={newLocationRule.city}
+                                                    onChange={e => setNewLocationRule({...newLocationRule, city: e.target.value})}
+                                                    className="bg-black/30 border border-white/10 rounded px-2 py-1 text-white w-full"
+                                                >
+                                                    {Object.keys(TAIWAN_LOCATIONS).map(c => <option key={c} value={c}>{c}</option>)}
+                                                </select>
+                                            </td>
+                                            <td className="p-2">
+                                                <input type="text" disabled value="all" className="bg-transparent text-slate-500 w-full text-center" />
+                                            </td>
+                                            <td className="p-2"><input type="number" value={newLocationRule.minSpend} onChange={e => setNewLocationRule({...newLocationRule, minSpend: parseInt(e.target.value)})} className="bg-black/30 border border-white/10 rounded px-2 py-1 text-white w-20" /></td>
+                                            <td className="p-2"><input type="number" value={newLocationRule.setupFee} onChange={e => setNewLocationRule({...newLocationRule, setupFee: parseInt(e.target.value)})} className="bg-black/30 border border-white/10 rounded px-2 py-1 text-white w-20" /></td>
+                                            <td className="p-2"><input type="number" value={newLocationRule.teardownFee} onChange={e => setNewLocationRule({...newLocationRule, teardownFee: parseInt(e.target.value)})} className="bg-black/30 border border-white/10 rounded px-2 py-1 text-white w-20" /></td>
+                                            <td className="p-2"><button onClick={addLocationRule} className="text-green-500 font-bold hover:text-white">＋</button></td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        {/* Special Dates */}
+                        <div>
+                             <h5 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4">特殊節日加成</h5>
+                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                 <div className="space-y-2">
+                                     {vendorData.decoratorSettings.specialDateModifiers?.map((rule, idx) => (
+                                         <div key={idx} className="flex justify-between items-center bg-white/5 p-3 rounded-xl border border-white/5">
+                                             <div>
+                                                 <span className="text-primary font-bold mr-2">每年 {rule.date.slice(5)}</span>
+                                                 <span className="text-white text-sm">{rule.note}</span>
+                                             </div>
+                                             <div className="flex items-center gap-4">
+                                                 <span className="text-slate-300 font-bold">x{rule.multiplier}</span>
+                                                 <button onClick={() => removeSpecialDateRule(idx)} className="text-slate-600 hover:text-red-500">✕</button>
+                                             </div>
+                                         </div>
+                                     ))}
+                                 </div>
+                                 <div className="bg-white/5 p-4 rounded-xl border border-white/10 space-y-3">
+                                     <div className="flex gap-2">
+                                        <input type="date" value={newSpecialDate.date} onChange={e => setNewSpecialDate({...newSpecialDate, date: e.target.value})} className="bg-black/30 border border-white/10 rounded px-3 py-2 text-white flex-1" />
+                                        <input type="number" step="0.1" value={newSpecialDate.multiplier} onChange={e => setNewSpecialDate({...newSpecialDate, multiplier: parseFloat(e.target.value)})} className="bg-black/30 border border-white/10 rounded px-3 py-2 text-white w-20" placeholder="倍率" />
+                                     </div>
+                                     <div className="flex gap-2">
+                                        <input type="text" value={newSpecialDate.note} onChange={e => setNewSpecialDate({...newSpecialDate, note: e.target.value})} className="bg-black/30 border border-white/10 rounded px-3 py-2 text-white flex-1" placeholder="節日備註 (例: 情人節)" />
+                                        <button onClick={addSpecialDateRule} className="bg-primary text-white px-4 rounded font-bold">新增</button>
+                                     </div>
+                                 </div>
+                             </div>
+                        </div>
+
+                        {/* Other Fees */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                             <div>
+                                 <label className="block text-xs font-bold text-slate-500 uppercase mb-2">無電梯上樓費 (每層)</label>
+                                 <input 
+                                    type="number" 
+                                    value={vendorData.decoratorSettings.upstairsFee} 
+                                    onChange={e => setVendorData({...vendorData!, decoratorSettings: {...vendorData!.decoratorSettings!, upstairsFee: parseInt(e.target.value)}})}
+                                    className="w-full bg-black/30 border border-white/10 rounded-xl p-3 text-white font-bold"
+                                 />
+                             </div>
+                             <div>
+                                 <label className="block text-xs font-bold text-slate-500 uppercase mb-2">急件處理費 (48h內)</label>
+                                 <input 
+                                    type="number" 
+                                    value={vendorData.decoratorSettings.urgentOrderFee} 
+                                    onChange={e => setVendorData({...vendorData!, decoratorSettings: {...vendorData!.decoratorSettings!, urgentOrderFee: parseInt(e.target.value)}})}
+                                    className="w-full bg-black/30 border border-white/10 rounded-xl p-3 text-white font-bold"
+                                 />
+                             </div>
+                             <div className="flex items-end pb-3">
+                                 <label className="flex items-center gap-3 cursor-pointer">
+                                     <input 
+                                        type="checkbox" 
+                                        checked={vendorData.decoratorSettings.urgentOrderEnabled} 
+                                        onChange={e => setVendorData({...vendorData!, decoratorSettings: {...vendorData!.decoratorSettings!, urgentOrderEnabled: e.target.checked}})}
+                                        className="w-5 h-5 accent-primary"
+                                     />
+                                     <span className="text-white font-bold">啟用急件接單功能</span>
+                                 </label>
+                             </div>
+                        </div>
+                    </div>
+                )}
+             </div>
         </div>
     );
   };
@@ -544,832 +992,272 @@ const VendorPortal: React.FC<VendorPortalProps> = ({ onBack }) => {
   const renderProfileTab = () => {
     if (!vendorData) return null;
     return (
-      <div className="p-6 max-w-4xl mx-auto animate-fade-in">
-           {/* Basic Info */}
-           <div className="bg-slate-800 p-6 rounded-lg border border-slate-700 mb-6 shadow-sm">
-               <h3 className="text-lg font-bold text-white mb-4 border-b border-slate-700 pb-2">基本資料</h3>
-               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                   <div>
-                       <label className="block text-sm text-slate-400 mb-1">名稱</label>
-                       <input 
-                          type="text" 
-                          value={vendorData.name} 
-                          onChange={e => handleProfileUpdate('name', e.target.value)}
-                          className="w-full bg-slate-900 border-slate-600 rounded p-2 text-white"
-                       />
-                   </div>
-                   <div>
-                       <label className="block text-sm text-slate-400 mb-1">大頭貼 URL</label>
-                       <input 
-                          type="text" 
-                          value={vendorData.imageUrl} 
-                          onChange={e => handleProfileUpdate('imageUrl', e.target.value)}
-                          className="w-full bg-slate-900 border-slate-600 rounded p-2 text-white text-sm"
-                       />
-                   </div>
-                   <div className="md:col-span-2">
-                       <label className="block text-sm text-slate-400 mb-1">服務描述</label>
-                       <textarea 
-                          value={vendorData.description} 
-                          onChange={e => handleProfileUpdate('description', e.target.value)}
-                          className="w-full bg-slate-900 border-slate-600 rounded p-2 text-white h-24"
-                       />
-                   </div>
-                   {vendorData.category === ServiceCategory.DECOR && (
-                       <div className="md:col-span-2">
-                           <label className="block text-sm text-slate-400 mb-1">官網連結</label>
-                           <input 
-                              type="text" 
-                              value={vendorData.websiteUrl || ''} 
-                              onChange={e => handleProfileUpdate('websiteUrl', e.target.value)}
-                              className="w-full bg-slate-900 border-slate-600 rounded p-2 text-white"
-                           />
-                       </div>
-                   )}
-               </div>
-           </div>
-
-           {/* Pricing & Fees */}
-           <div className="bg-slate-800 p-6 rounded-lg border border-slate-700 mb-6 shadow-sm">
-               <h3 className="text-lg font-bold text-white mb-4 border-b border-slate-700 pb-2">報價設定</h3>
-               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                   <div>
-                       <label className="block text-sm text-slate-400 mb-1">
-                           {vendorData.rateType === 'hourly' ? '每小時基本費率' : '單次/基本費率'}
-                       </label>
-                       <div className="relative">
-                           <span className="absolute left-3 top-2 text-slate-500">$</span>
-                           <input 
-                              type="number" 
-                              value={vendorData.rate} 
-                              onChange={e => handleProfileUpdate('rate', parseInt(e.target.value))}
-                              className="w-full bg-slate-900 border-slate-600 rounded p-2 pl-6 text-white font-bold"
-                           />
-                       </div>
-                   </div>
-                   <div>
-                       <label className="block text-sm text-slate-400 mb-1">計費方式</label>
-                       <select 
-                          value={vendorData.rateType}
-                          onChange={e => handleProfileUpdate('rateType', e.target.value)}
-                          className="w-full bg-slate-900 border-slate-600 rounded p-2 text-white"
-                       >
-                           <option value="hourly">每小時計費</option>
-                           <option value="fixed">單次固定價</option>
-                           <option value="package">方案制</option>
-                       </select>
-                   </div>
-                   {/* Overtime Rate if applicable */}
-                   {vendorData.rateType === 'fixed' && vendorData.category !== ServiceCategory.DECOR && (
-                      <div>
-                           <label className="block text-sm text-slate-400 mb-1">超時費用 ($/hr)</label>
-                           <input 
-                              type="number" 
-                              value={vendorData.overtimeRate || 0} 
-                              onChange={e => handleProfileUpdate('overtimeRate', parseInt(e.target.value))}
-                              className="w-full bg-slate-900 border-slate-600 rounded p-2 text-white"
-                           />
-                      </div>
-                   )}
-               </div>
-               
-               {/* Host Specific Settings */}
-               {vendorData.category === ServiceCategory.HOST && (
-                   <div className="bg-slate-900/50 p-4 rounded border border-slate-600 mb-4">
-                       <h4 className="text-sm font-bold text-indigo-400 mb-3">主持人進階設定</h4>
-                       <div className="grid grid-cols-2 gap-4 mb-4">
-                           <div>
-                               <label className="text-xs text-slate-400 block mb-1">基本時數 (hr)</label>
-                               <input 
-                                  type="number"
-                                  value={vendorData.hostSettings?.baseDuration || 4}
-                                  onChange={e => handleProfileUpdate('hostSettings', { ...vendorData.hostSettings, baseDuration: parseInt(e.target.value) })}
-                                  className="w-full bg-slate-800 border-slate-600 rounded px-2 py-1 text-white"
-                               />
-                           </div>
-                           <div>
-                               <label className="text-xs text-slate-400 block mb-1">超時費率 ($/hr)</label>
-                               <input 
-                                  type="number"
-                                  value={vendorData.hostSettings?.overtimeRate || 0}
-                                  onChange={e => handleProfileUpdate('hostSettings', { ...vendorData.hostSettings, overtimeRate: parseInt(e.target.value) })}
-                                  className="w-full bg-slate-800 border-slate-600 rounded px-2 py-1 text-white"
-                               />
-                           </div>
-                       </div>
-                       
-                       <div className="border-t border-slate-700 pt-3">
-                           <label className="text-xs text-slate-400 block mb-2">特殊活動加價</label>
-                           <div className="flex gap-2 mb-2">
-                               <select 
-                                  value={selectedEventTypeForSurcharge}
-                                  onChange={e => setSelectedEventTypeForSurcharge(e.target.value)}
-                                  className="flex-1 bg-slate-800 border-slate-600 rounded text-xs text-white p-1"
-                               >
-                                   <option value="">選擇活動類型</option>
-                                   {Object.values(EventType).map(et => <option key={et} value={et}>{et}</option>)}
-                               </select>
-                               <input 
-                                  type="number"
-                                  value={surchargeInput}
-                                  onChange={e => setSurchargeInput(e.target.value)}
-                                  placeholder="加價金額"
-                                  className="w-24 bg-slate-800 border-slate-600 rounded text-xs text-white p-1"
-                               />
-                               <button onClick={updateHostSurcharge} className="bg-indigo-600 text-white px-3 rounded text-xs">新增</button>
-                           </div>
-                           <div className="flex flex-wrap gap-2">
-                               {vendorData.hostSettings?.eventTypeAddons && Object.entries(vendorData.hostSettings.eventTypeAddons).map(([type, fee]) => (
-                                   <span key={type} className="bg-slate-800 px-2 py-1 rounded text-xs text-slate-300 border border-slate-600 flex items-center">
-                                       {type}: +${fee}
-                                       <button onClick={() => removeHostSurcharge(type)} className="ml-2 text-red-400 hover:text-white">×</button>
-                                   </span>
-                               ))}
-                           </div>
-                       </div>
-                   </div>
-               )}
-
-               {/* Travel Fees */}
-               <div className="border-t border-slate-700 pt-4">
-                   <h4 className="text-sm font-bold text-slate-300 mb-2">跨區車馬費設定</h4>
-                   <div className="flex gap-2 mb-3">
-                       <select 
-                          value={selectedCityForFee}
-                          onChange={e => setSelectedCityForFee(e.target.value)}
-                          className="bg-slate-900 border-slate-600 rounded p-2 text-white text-sm flex-1"
-                       >
-                           <option value="">選擇縣市</option>
-                           {Object.keys(TAIWAN_LOCATIONS).map(city => <option key={city} value={city}>{city}</option>)}
-                       </select>
-                       <input 
-                          type="number" 
-                          value={feeInput}
-                          onChange={e => setFeeInput(e.target.value)}
-                          placeholder="費用"
-                          className="bg-slate-900 border-slate-600 rounded p-2 text-white text-sm w-24"
-                       />
-                       <button onClick={updateTravelFee} className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded text-sm font-bold">新增</button>
-                   </div>
-                   <div className="flex flex-wrap gap-2">
-                       {Object.entries(vendorData.travelFees).map(([city, fee]) => (
-                           <div key={city} className="bg-slate-700 px-3 py-1 rounded-full text-sm text-white flex items-center">
-                               {city} +${fee}
-                               <button onClick={() => removeTravelFee(city)} className="ml-2 text-slate-400 hover:text-white">×</button>
-                           </div>
-                       ))}
-                   </div>
-               </div>
-           </div>
-
-           {/* Portfolio */}
-           <div className="bg-slate-800 p-6 rounded-lg border border-slate-700 shadow-sm">
-               <h3 className="text-lg font-bold text-white mb-4 border-b border-slate-700 pb-2">作品集管理</h3>
-               
-               <div className="mb-6">
-                   <label className="block text-sm text-slate-400 mb-2">圖片集 (支援多張上傳)</label>
-                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                       {vendorData.portfolio.map((url, idx) => (
-                           <div key={idx} className="relative group">
-                               <img src={url} className="w-full h-32 object-cover rounded border border-slate-600" />
-                               <button 
-                                  onClick={() => handleRemovePortfolioImage(idx)}
-                                  className="absolute top-1 right-1 bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                               >
-                                   <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                               </button>
-                           </div>
-                       ))}
-                       <label className="border-2 border-dashed border-slate-600 rounded flex flex-col items-center justify-center h-32 cursor-pointer hover:bg-slate-700 hover:border-indigo-500 transition-colors">
-                           <span className="text-2xl text-slate-500 mb-1">+</span>
-                           <span className="text-xs text-slate-500">上傳圖片</span>
-                           <input type="file" accept="image/*" className="hidden" onChange={handlePortfolioUpload} />
-                       </label>
-                   </div>
-               </div>
-
-               <div>
-                   <label className="block text-sm text-slate-400 mb-2">影片連結</label>
-                   <div className="space-y-2 mb-2">
-                       {vendorData.portfolioVideos?.map((url, idx) => (
-                           <div key={idx} className="flex items-center gap-2 bg-slate-900 p-2 rounded border border-slate-700">
-                               <span className="text-xs text-blue-400 truncate flex-1">{url}</span>
-                               <button onClick={() => handleRemoveVideo(idx)} className="text-red-400 hover:text-white">×</button>
-                           </div>
-                       ))}
-                   </div>
-                   <div className="flex gap-2">
-                       <input 
-                          type="text" 
-                          placeholder="輸入 YouTube 連結..." 
-                          onKeyDown={e => {
-                              if (e.key === 'Enter') {
-                                  handleAddVideoUrl(e.currentTarget.value);
-                                  e.currentTarget.value = '';
-                              }
-                          }}
-                          className="w-full bg-slate-900 border-slate-600 rounded p-2 text-white text-sm"
-                       />
-                   </div>
-               </div>
-           </div>
-      </div>
+        <div className="space-y-8 animate-fade-in">
+             <div className="bg-white/5 p-8 rounded-3xl border border-white/5 grid grid-cols-1 md:grid-cols-2 gap-8">
+                 <div className="space-y-6">
+                     <div>
+                         <label className="block text-xs font-bold text-slate-500 uppercase mb-2">品牌/服務名稱</label>
+                         <input 
+                            type="text" 
+                            value={vendorData.name} 
+                            onChange={e => setVendorData({...vendorData!, name: e.target.value})}
+                            className="w-full bg-black/30 border border-white/10 rounded-xl p-4 text-white font-bold focus:border-primary outline-none"
+                         />
+                     </div>
+                     <div>
+                         <label className="block text-xs font-bold text-slate-500 uppercase mb-2">服務類別</label>
+                         <input type="text" disabled value={vendorData.category} className="w-full bg-white/5 border border-white/5 rounded-xl p-4 text-slate-500 font-bold" />
+                     </div>
+                     <div>
+                         <label className="block text-xs font-bold text-slate-500 uppercase mb-2">品牌簡介</label>
+                         <textarea 
+                            value={vendorData.description} 
+                            onChange={e => setVendorData({...vendorData!, description: e.target.value})}
+                            className="w-full bg-black/30 border border-white/10 rounded-xl p-4 text-white focus:border-primary outline-none h-40"
+                         />
+                     </div>
+                 </div>
+                 <div className="space-y-6">
+                     <div>
+                         <label className="block text-xs font-bold text-slate-500 uppercase mb-2">官方網站 / 社群連結</label>
+                         <input 
+                            type="text" 
+                            value={vendorData.websiteUrl || ''} 
+                            onChange={e => setVendorData({...vendorData!, websiteUrl: e.target.value})}
+                            className="w-full bg-black/30 border border-white/10 rounded-xl p-4 text-white font-bold focus:border-primary outline-none"
+                            placeholder="https://..."
+                         />
+                     </div>
+                     
+                     {/* Portfolio Images Manager (Simplified) */}
+                     <div>
+                         <label className="block text-xs font-bold text-slate-500 uppercase mb-2">作品集圖片 ({vendorData.portfolio.length})</label>
+                         <div className="grid grid-cols-3 gap-2">
+                             {vendorData.portfolio.map((img, idx) => (
+                                 <div key={idx} className="aspect-square rounded-lg overflow-hidden relative group">
+                                     <img src={img} className="w-full h-full object-cover" />
+                                     <button 
+                                        onClick={() => {
+                                            const newPortfolio = vendorData!.portfolio.filter((_, i) => i !== idx);
+                                            setVendorData({...vendorData!, portfolio: newPortfolio});
+                                        }}
+                                        className="absolute inset-0 bg-red-500/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white font-bold"
+                                     >
+                                         移除
+                                     </button>
+                                 </div>
+                             ))}
+                             <button className="aspect-square rounded-lg border-2 border-dashed border-white/10 flex items-center justify-center text-slate-500 hover:text-white hover:border-white/30 transition-all">
+                                 + 上傳
+                             </button>
+                         </div>
+                     </div>
+                 </div>
+             </div>
+        </div>
     );
   };
 
-  const renderDashboard = () => {
-      // ... (existing dashboard render code omitted) ...
-      // Keeping wrapper structure
-      return (
-           <div className="min-h-screen bg-slate-950 p-4 md:p-6 text-slate-200">
-               {/* ... (Header and Tabs) ... */}
-               <div className="max-w-6xl mx-auto">
-                   <button 
-                     onClick={handleLogout} 
-                     className="mb-4 flex items-center text-slate-400 hover:text-white transition-colors text-sm font-medium"
-                   >
-                       <svg className="w-5 h-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                       </svg>
-                       回到上一頁
-                   </button>
-                   <div className="flex justify-between items-center mb-8 bg-slate-900 p-6 rounded-2xl shadow-lg border border-slate-800">
-                       <div className="flex items-center gap-4">
-                           <img src={vendorData!.imageUrl} className="w-16 h-16 rounded-full border-2 border-indigo-500 object-cover"/>
-                           <div><h1 className="text-2xl font-bold text-white">{vendorData!.name}</h1><span className="text-xs bg-indigo-900 text-indigo-300 px-2 py-1 rounded">{vendorData!.category}</span></div>
-                       </div>
-                       
-                       <div className="flex items-center gap-4">
-                           <button 
-                             onClick={togglePauseStatus}
-                             className={`flex items-center gap-2 px-4 py-2 rounded-full border transition-all ${vendorData!.isPaused 
-                                ? 'bg-red-900/30 border-red-500 text-red-400 animate-pulse' 
-                                : 'bg-green-900/30 border-green-500 text-green-400'}`}
-                           >
-                               <span className={`w-3 h-3 rounded-full ${vendorData!.isPaused ? 'bg-red-500' : 'bg-green-500'}`}></span>
-                               {vendorData!.isPaused ? '已暫停接案' : '接案中'}
-                           </button>
-
-                           <button onClick={handleLogout} className="text-slate-400 hover:text-white border border-slate-700 px-4 py-2 rounded">登出</button>
-                       </div>
-                   </div>
-                   
-                   <div className="flex space-x-1 mb-6 border-b border-slate-800">
-                        <button onClick={() => setActiveTab('SCHEDULE')} className={`px-6 py-3 font-medium rounded-t-lg transition-colors ${activeTab === 'SCHEDULE' ? 'bg-slate-800 text-indigo-400 border-t border-x border-slate-700' : 'text-slate-500 hover:bg-slate-900'}`}>📅 檔期管理</button>
-                        <button onClick={() => setActiveTab('PROFILE')} className={`px-6 py-3 font-medium rounded-t-lg transition-colors ${activeTab === 'PROFILE' ? 'bg-slate-800 text-indigo-400 border-t border-x border-slate-700' : 'text-slate-500 hover:bg-slate-900'}`}>👤 廠商檔案</button>
-                        {vendorData!.category === ServiceCategory.DECOR && (
-                             <button onClick={() => setActiveTab('PACKAGES')} className={`px-6 py-3 font-medium rounded-t-lg transition-colors ${activeTab === 'PACKAGES' ? 'bg-slate-800 text-indigo-400 border-t border-x border-slate-700' : 'text-slate-500 hover:bg-slate-900'}`}>📦 方案與報價</button>
-                        )}
-                   </div>
-
-                   <div className="bg-slate-900/50 min-h-[500px] rounded-b-xl rounded-tr-xl">
-                        {activeTab === 'PROFILE' && renderProfileTab()}
-                        {activeTab === 'PACKAGES' && renderPackagesTab()}
-                        {activeTab === 'SCHEDULE' && (
-                             <div className="p-4 md:p-6 animate-fade-in">
-                                 {/* Existing Schedule UI */}
-                                 <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
-                                     <div className="flex items-center space-x-4">
-                                         <button onClick={prevMonth} className="text-slate-400 hover:text-white p-2 border border-slate-700 rounded-full">←</button>
-                                         <h2 className="text-xl font-bold text-white tracking-wide">
-                                             {currentMonth.getFullYear()}年 {currentMonth.getMonth() + 1}月
-                                         </h2>
-                                         <button onClick={nextMonth} className="text-slate-400 hover:text-white p-2 border border-slate-700 rounded-full">→</button>
-                                     </div>
-                                     <button onClick={() => setIsBatchModalOpen(true)} className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-3 rounded-lg shadow-lg font-bold transition-all flex items-center">
-                                         ➕ 快速設定本月排班
-                                     </button>
-                                 </div>
-
-                                 <div className="mb-6 bg-slate-800/50 p-4 rounded-lg border border-slate-700">
-                                     <h3 className="text-xs font-bold text-slate-400 mb-2 uppercase">接案地區 (點擊切換)</h3>
-                                     <div className="flex flex-wrap gap-2">
-                                         {Object.keys(TAIWAN_LOCATIONS).map(city => (
-                                             <button 
-                                                key={city}
-                                                onClick={() => toggleLocation(city)}
-                                                className={`text-xs px-3 py-1 rounded-full border transition-all ${
-                                                    vendorData!.serviceAreas.includes(city) 
-                                                    ? 'bg-orange-600 border-orange-500 text-white shadow-sm' 
-                                                    : 'bg-slate-900 border-slate-700 text-slate-500 hover:border-slate-500'
-                                                }`}
-                                             >
-                                                 {city}
-                                             </button>
-                                         ))}
-                                     </div>
-                                 </div>
-                                 {/* Calendar Grid */}
-                                 <div className="grid grid-cols-7 gap-2">
-                                     {['日', '一', '二', '三', '四', '五', '六'].map(d => (
-                                         <div key={d} className="text-center font-bold text-slate-500 py-2">{d}</div>
-                                     ))}
-                                     
-                                     {Array.from({length: getDaysInMonth(currentMonth)[0].dayOfWeek}).map((_, i) => <div key={`empty-${i}`} className="bg-transparent"></div>)}
-                                     
-                                     {getDaysInMonth(currentMonth).map(day => {
-                                         const hours = vendorData!.availableHours[day.dateString] || [];
-                                         const isFull = hours.length === 24;
-                                         const isPartial = hours.length > 0 && hours.length < 24;
-                                         const isNone = hours.length === 0;
-                                         
-                                         return (
-                                             <div 
-                                                key={day.dateString}
-                                                onClick={() => setEditingDate(day.dateString)}
-                                                className={`
-                                                    min-h-[80px] rounded-lg p-2 cursor-pointer border transition-all hover:scale-105
-                                                    ${isFull ? 'bg-indigo-900/30 border-indigo-500/50 hover:bg-indigo-900/50' : ''}
-                                                    ${isPartial ? 'bg-orange-900/30 border-orange-500/50 hover:bg-orange-900/50' : ''}
-                                                    ${isNone ? 'bg-slate-800/50 border-slate-800 hover:border-slate-600' : ''}
-                                                `}
-                                             >
-                                                 <div className="flex justify-between items-start">
-                                                     <span className={`font-bold ${isNone ? 'text-slate-600' : 'text-white'}`}>{day.dayOfMonth}</span>
-                                                     {isFull && <span className="text-[10px] bg-green-900 text-green-300 px-1 rounded">全天</span>}
-                                                 </div>
-                                                 {isPartial && <div className="text-[10px] text-orange-300 mt-1">{hours.length} 小時</div>}
-                                             </div>
-                                         )
-                                     })}
-                                 </div>
-                             </div>
-                        )}
+  const renderDashboard = () => (
+    <div className="max-w-7xl mx-auto pt-20 px-6 animate-fade-in relative z-10 pb-48">
+      {showSaveToast && <Toast message="已儲存變更" onClose={() => setShowSaveToast(false)} />}
+      {selectedOrderForDetail && renderOrderDetailModal()}
+      
+      <div className="flex flex-col md:flex-row justify-between items-center mb-16 glass-card p-10 rounded-[56px] border border-white/10 shadow-2xl">
+        <div className="flex items-center gap-8 w-full md:w-auto">
+           <div className="relative group w-24 h-24 shrink-0">
+               <div 
+                   onClick={() => profileImageInputRef.current?.click()}
+                   className="w-full h-full rounded-3xl overflow-hidden border-2 border-primary cursor-pointer shadow-2xl relative"
+               >
+                   <img src={vendorData!.imageUrl} className="w-full h-full object-cover transition-opacity group-hover:opacity-50" />
+                   <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                       <span className="text-[10px] font-black text-white uppercase tracking-widest text-center leading-tight">更換<br/>照片</span>
                    </div>
                </div>
-
-               {/* ... (Batch Modal code kept as is) ... */}
-               {isBatchModalOpen && (
-                   <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-                        <div className="bg-slate-900 rounded-xl p-6 w-full max-w-md border border-slate-700 shadow-2xl animate-fade-in-up">
-                            {/* ... Content of Batch Modal kept same ... */}
-                            <h3 className="text-xl font-bold text-white mb-4">批量排班設定</h3>
-                             <div className="mb-4">
-                               <label className="block text-sm text-slate-400 mb-2">1. 選擇套用月份</label>
-                               <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto p-2 bg-slate-800 rounded custom-scrollbar">
-                                   {getFutureMonthsList().map(monthStr => (
-                                       <label key={monthStr} className={`flex items-center space-x-2 px-3 py-1.5 rounded cursor-pointer border transition-all ${batchTargetMonths.includes(monthStr) ? 'bg-indigo-600 border-indigo-400 text-white' : 'bg-slate-900 border-slate-700 text-slate-400'}`}>
-                                           <input 
-                                                type="checkbox" 
-                                                checked={batchTargetMonths.includes(monthStr)}
-                                                onChange={(e) => {
-                                                    if (e.target.checked) setBatchTargetMonths(prev => [...prev, monthStr]);
-                                                    else setBatchTargetMonths(prev => prev.filter(m => m !== monthStr));
-                                                }}
-                                                className="hidden"
-                                           />
-                                           <span className="text-xs font-bold">{monthStr}</span>
-                                       </label>
-                                   ))}
-                               </div>
-                           </div>
-                           <div className="mb-4">
-                               <label className="block text-sm text-slate-400 mb-2">2. 選擇星期</label>
-                               <div className="flex flex-wrap gap-2">
-                                   {['日', '一', '二', '三', '四', '五', '六'].map((d, i) => (
-                                       <button 
-                                        key={i}
-                                        onClick={() => setBatchWeekdays(prev => prev.includes(i) ? prev.filter(w => w !== i) : [...prev, i])}
-                                        className={`w-8 h-8 rounded-full text-xs font-bold transition-all ${batchWeekdays.includes(i) ? 'bg-orange-600 text-white shadow' : 'bg-slate-800 text-slate-500'}`}
-                                       >
-                                           {d}
-                                       </button>
-                                   ))}
-                               </div>
-                           </div>
-                           <div className="flex gap-4 mb-6">
-                               <div className="flex-1">
-                                   <label className="block text-sm text-slate-400 mb-1">開始時間</label>
-                                   <select value={batchStartHour} onChange={e => setBatchStartHour(e.target.value)} className="w-full bg-slate-800 text-white rounded p-2 border border-slate-700">
-                                       {HOURS.map(h => <option key={h} value={h}>{h}</option>)}
-                                   </select>
-                               </div>
-                               <div className="flex-1">
-                                   <label className="block text-sm text-slate-400 mb-1">結束時間</label>
-                                   <select value={batchEndHour} onChange={e => setBatchEndHour(e.target.value)} className="w-full bg-slate-800 text-white rounded p-2 border border-slate-700">
-                                       {HOURS.map(h => <option key={h} value={h}>{h}</option>)}
-                                   </select>
-                               </div>
-                           </div>
-                           <div className="flex justify-end space-x-2">
-                               <button onClick={() => setIsBatchModalOpen(false)} className="px-4 py-2 text-slate-400 hover:text-white">取消</button>
-                               <button onClick={handleBatchApply} className="px-6 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded font-bold">確認套用</button>
-                           </div>
-                        </div>
-                   </div>
-               )}
-
-               {/* Decorator Settings Modal */}
-               {isDecorSettingsModalOpen && vendorData && vendorData.decoratorSettings && (
-                   <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
-                       <div className="bg-slate-900 rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col border border-slate-700 shadow-2xl animate-fade-in-up">
-                           <div className="p-6 border-b border-slate-800 flex justify-between items-center bg-slate-900 sticky top-0 z-10">
-                               <h3 className="text-xl font-bold text-white flex items-center">
-                                   <span className="bg-indigo-600 p-2 rounded-full mr-3">⚙️</span>
-                                   基礎報價設定
-                               </h3>
-                               <button onClick={() => setIsDecorSettingsModalOpen(false)} className="text-slate-400 hover:text-white">
-                                   <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                               </button>
-                           </div>
-
-                           <div className="flex border-b border-slate-800 bg-slate-800/50">
-                               <button onClick={() => setDecorSettingsTab('LOCATION')} className={`flex-1 py-4 text-sm font-bold transition-colors ${decorSettingsTab === 'LOCATION' ? 'text-indigo-400 border-b-2 border-indigo-500 bg-slate-800' : 'text-slate-400 hover:bg-slate-800'}`}>
-                                   1. 地區與外送費用
-                               </button>
-                               <button onClick={() => setDecorSettingsTab('TIME')} className={`flex-1 py-4 text-sm font-bold transition-colors ${decorSettingsTab === 'TIME' ? 'text-indigo-400 border-b-2 border-indigo-500 bg-slate-800' : 'text-slate-400 hover:bg-slate-800'}`}>
-                                   2. 特殊時段加成
-                               </button>
-                               <button onClick={() => setDecorSettingsTab('HOLIDAY')} className={`flex-1 py-4 text-sm font-bold transition-colors ${decorSettingsTab === 'HOLIDAY' ? 'text-indigo-400 border-b-2 border-indigo-500 bg-slate-800' : 'text-slate-400 hover:bg-slate-800'}`}>
-                                   3. 特殊節慶加成
-                               </button>
-                           </div>
-
-                           <div className="flex-1 overflow-y-auto p-6 bg-slate-900 custom-scrollbar">
-                               {decorSettingsTab === 'LOCATION' && (
-                                   <div className="space-y-6">
-                                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                            {/* Upstairs Fee Config */}
-                                            <div className="bg-orange-900/20 border border-orange-500/30 p-4 rounded-lg flex flex-col justify-between">
-                                                <div className="mb-2">
-                                                    <h4 className="font-bold text-orange-400 text-sm">搬運/上樓費設定 (統一計價)</h4>
-                                                    <p className="text-xs text-orange-200 mt-1">若外送地點非 1 樓 (含地下室)，將額外收取此費用。</p>
-                                                </div>
-                                                <div className="flex items-center justify-end">
-                                                    <span className="text-slate-400 text-sm mr-2">$</span>
-                                                    <input 
-                                                            type="number" 
-                                                            value={vendorData.decoratorSettings.upstairsFee || 0}
-                                                            onChange={(e) => handleProfileUpdate('decoratorSettings', { ...vendorData!.decoratorSettings, upstairsFee: parseInt(e.target.value) })}
-                                                            className="bg-slate-800 border-slate-600 rounded px-2 py-1 text-white w-24 text-center font-bold"
-                                                    />
-                                                </div>
-                                            </div>
-
-                                            {/* Urgent Order Fee Config */}
-                                            <div className="bg-red-900/20 border border-red-500/30 p-4 rounded-lg flex flex-col justify-between">
-                                                <div className="mb-2">
-                                                    <div className="flex justify-between items-center">
-                                                        <h4 className="font-bold text-red-400 text-sm">急件接單設定</h4>
-                                                        <label className="relative inline-flex items-center cursor-pointer">
-                                                            <input 
-                                                                type="checkbox" 
-                                                                className="sr-only peer"
-                                                                checked={vendorData.decoratorSettings.urgentOrderEnabled}
-                                                                onChange={(e) => handleProfileUpdate('decoratorSettings', { ...vendorData!.decoratorSettings, urgentOrderEnabled: e.target.checked })}
-                                                            />
-                                                            <div className="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-red-600"></div>
-                                                        </label>
-                                                    </div>
-                                                    <p className="text-xs text-red-200 mt-1">當訂單日期距離活動日 2 天內，自動加收費用 (依方案金額級距)。</p>
-                                                </div>
-                                                <div className="text-[10px] text-slate-300 bg-slate-900/50 p-2 rounded">
-                                                    <div className="flex justify-between border-b border-slate-700/50 pb-1 mb-1"><span>$5,000 以下</span> <span className="font-bold text-red-300">+$500</span></div>
-                                                    <div className="flex justify-between border-b border-slate-700/50 pb-1 mb-1"><span>$5,001 - $10,000</span> <span className="font-bold text-red-300">+$1,000</span></div>
-                                                    <div className="flex justify-between border-b border-slate-700/50 pb-1 mb-1"><span>$10,001 - $20,000</span> <span className="font-bold text-red-300">+$1,500</span></div>
-                                                    <div className="flex justify-between"><span>$20,001 以上</span> <span className="font-bold text-red-300">+$2,000</span></div>
-                                                </div>
-                                            </div>
-                                       </div>
-
-                                       <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700">
-                                           <h4 className="font-bold text-white mb-4">新增地區規則</h4>
-                                           <div className="grid grid-cols-2 md:grid-cols-6 gap-3 items-end">
-                                               <div>
-                                                   <label className="block text-xs text-slate-400 mb-1">縣市</label>
-                                                   <select value={locCity} onChange={e => { setLocCity(e.target.value); setLocDistrict(''); }} className="w-full bg-slate-900 border-slate-600 rounded px-2 py-2 text-white text-sm">
-                                                       <option value="">選擇縣市</option>
-                                                       {Object.keys(TAIWAN_LOCATIONS).map(c => <option key={c} value={c}>{c}</option>)}
-                                                   </select>
-                                               </div>
-                                               <div>
-                                                   <label className="block text-xs text-slate-400 mb-1">行政區</label>
-                                                   <select value={locDistrict} onChange={e => setLocDistrict(e.target.value)} disabled={!locCity} className="w-full bg-slate-900 border-slate-600 rounded px-2 py-2 text-white text-sm disabled:opacity-50">
-                                                       <option value="">選擇區域</option>
-                                                       <option value="all">全部 (預設)</option>
-                                                       {availableDistrictsForDecor?.map(d => <option key={d} value={d}>{d}</option>)}
-                                                   </select>
-                                               </div>
-                                               <div>
-                                                   <label className="block text-xs text-slate-400 mb-1">佈置費 ($)</label>
-                                                   <input type="number" value={locSetupFee} onChange={e => setLocSetupFee(e.target.value)} className="w-full bg-slate-900 border-slate-600 rounded px-2 py-2 text-white text-sm" placeholder="2000" />
-                                               </div>
-                                               <div>
-                                                   <label className="block text-xs text-slate-400 mb-1">撤場費 ($)</label>
-                                                   <input type="number" value={locTeardownFee} onChange={e => setLocTeardownFee(e.target.value)} className="w-full bg-slate-900 border-slate-600 rounded px-2 py-2 text-white text-sm" placeholder="1000" />
-                                               </div>
-                                               <div>
-                                                   <label className="block text-xs text-slate-400 mb-1">外送費 ($)</label>
-                                                   <input type="number" value={locDeliveryFee} onChange={e => setLocDeliveryFee(e.target.value)} className="w-full bg-slate-900 border-slate-600 rounded px-2 py-2 text-white text-sm" placeholder="500" />
-                                               </div>
-                                               <button onClick={addLocationRule} className="bg-indigo-600 text-white py-2 rounded font-bold hover:bg-indigo-500">新增</button>
-                                           </div>
-                                       </div>
-
-                                       <div>
-                                           <h4 className="font-bold text-slate-300 mb-3 text-sm">現有規則列表</h4>
-                                           <div className="bg-slate-800 rounded-lg overflow-hidden border border-slate-700">
-                                               <table className="w-full text-sm text-left">
-                                                   <thead className="bg-slate-700 text-slate-300">
-                                                       <tr>
-                                                           <th className="p-3">縣市</th>
-                                                           <th className="p-3">行政區</th>
-                                                           <th className="p-3">佈置費</th>
-                                                           <th className="p-3">撤場費</th>
-                                                           <th className="p-3">外送費</th>
-                                                           <th className="p-3 text-right">操作</th>
-                                                       </tr>
-                                                   </thead>
-                                                   <tbody className="divide-y divide-slate-700">
-                                                       {vendorData.decoratorSettings.locationFeeRules.map((rule, idx) => (
-                                                           <tr key={idx} className="hover:bg-slate-700/50">
-                                                               <td className="p-3 font-bold text-white">{rule.city}</td>
-                                                               <td className="p-3">
-                                                                   {rule.district === 'all' 
-                                                                    ? <span className="bg-slate-600 text-xs px-2 py-0.5 rounded text-white">全區適用</span> 
-                                                                    : <span className="text-indigo-400 font-bold">{rule.district}</span>}
-                                                               </td>
-                                                               <td className="p-3 text-slate-300">${rule.setupFee}</td>
-                                                               <td className="p-3 text-slate-300">${rule.teardownFee}</td>
-                                                               <td className="p-3 text-slate-300">${rule.deliveryFee || 0}</td>
-                                                               <td className="p-3 text-right">
-                                                                   <button onClick={() => removeLocationRule(rule.city, rule.district)} className="text-red-400 hover:text-white text-xs border border-red-900 bg-red-900/20 px-2 py-1 rounded">刪除</button>
-                                                               </td>
-                                                           </tr>
-                                                       ))}
-                                                        {vendorData.decoratorSettings.locationFeeRules.length === 0 && (
-                                                            <tr><td colSpan={6} className="p-4 text-center text-slate-500">暫無設定規則，請由上方新增</td></tr>
-                                                        )}
-                                                   </tbody>
-                                               </table>
-                                           </div>
-                                       </div>
-                                   </div>
-                               )}
-
-                               {/* ... (Other tabs same as before) ... */}
-                               {decorSettingsTab === 'TIME' && (
-                                   <div>
-                                       <div className="bg-indigo-900/20 border border-indigo-500/30 p-4 rounded-lg mb-6 text-sm text-indigo-200">
-                                           ℹ️ 設定每個小時的加價金額。若該小時無加價，請留空或填 0。
-                                       </div>
-                                       <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-4">
-                                           {HOURS.map((h, i) => {
-                                               const currentFee = vendorData!.decoratorSettings?.hourlySurcharges[i] || '';
-                                               return (
-                                                   <div key={i} className={`bg-slate-800 p-3 rounded border ${currentFee ? 'border-orange-500 bg-slate-800' : 'border-slate-700'}`}>
-                                                       <div className="text-xs text-slate-400 mb-1 font-bold">{h} - {i+1}:00</div>
-                                                       <div className="relative">
-                                                           <span className="absolute left-2 top-1.5 text-slate-500 text-xs">$</span>
-                                                           <input 
-                                                                type="number" 
-                                                                value={currentFee} 
-                                                                onChange={e => updateHourlySurcharge(i, parseInt(e.target.value) || 0)}
-                                                                className={`w-full bg-slate-900 rounded px-2 py-1 pl-5 text-sm ${currentFee ? 'text-orange-400 font-bold' : 'text-slate-500'}`}
-                                                                placeholder="0"
-                                                           />
-                                                       </div>
-                                                   </div>
-                                               )
-                                           })}
-                                       </div>
-                                   </div>
-                               )}
-
-                               {decorSettingsTab === 'HOLIDAY' && (
-                                   <div className="space-y-8">
-                                       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                            {/* Fixed Date Holidays */}
-                                            <div className="bg-slate-800 p-5 rounded-xl border border-slate-700">
-                                                <h4 className="font-bold text-white mb-4 border-b border-slate-700 pb-2">固定國曆節日</h4>
-                                                <div className="space-y-3">
-                                                    {[
-                                                        { d: '01-01', label: '元旦 (1/1)' },
-                                                        { d: '02-14', label: '西洋情人節 (2/14)' },
-                                                        { d: '05-20', label: '520 情人節' },
-                                                        { d: '12-31', label: '跨年夜 (12/31)' },
-                                                    ].map(item => (
-                                                        <label key={item.d} className="flex items-center space-x-3 cursor-pointer p-2 hover:bg-slate-700 rounded transition-colors">
-                                                            <input 
-                                                                type="checkbox" 
-                                                                checked={vendorData!.decoratorSettings?.holidays.includes(item.d)}
-                                                                onChange={() => toggleFixedHoliday(item.d)}
-                                                                className="w-5 h-5 rounded border-slate-500 bg-slate-900 text-indigo-500 focus:ring-indigo-500"
-                                                            />
-                                                            <span className="text-slate-200">{item.label}</span>
-                                                        </label>
-                                                    ))}
-                                                    
-                                                    {/* Custom Date Input */}
-                                                    <div className="pt-4 border-t border-slate-700 mt-2">
-                                                        <label className="text-xs text-slate-400 block mb-1">新增其他日期 (MM-DD)</label>
-                                                        <div className="flex gap-2">
-                                                            <input 
-                                                                type="text" 
-                                                                placeholder="如: 10-10" 
-                                                                value={newHolidayDate}
-                                                                onChange={e => setNewHolidayDate(e.target.value)}
-                                                                className="flex-1 bg-slate-900 border-slate-600 rounded px-2 py-1 text-sm text-white"
-                                                            />
-                                                            <button 
-                                                                onClick={() => {
-                                                                    if(newHolidayDate.match(/^\d{2}-\d{2}$/)) {
-                                                                        toggleFixedHoliday(newHolidayDate);
-                                                                        setNewHolidayDate('');
-                                                                    } else {
-                                                                        alert('格式錯誤，請輸入 MM-DD (例如 12-25)');
-                                                                    }
-                                                                }}
-                                                                className="bg-indigo-600 text-white px-3 py-1 rounded text-xs"
-                                                            >
-                                                                新增
-                                                            </button>
-                                                        </div>
-                                                        <div className="flex flex-wrap gap-2 mt-2">
-                                                            {vendorData!.decoratorSettings?.holidays
-                                                                .filter(d => !['01-01','02-14','05-20','12-31'].includes(d))
-                                                                .map(d => (
-                                                                    <span key={d} className="bg-slate-900 text-xs px-2 py-1 rounded border border-slate-600 flex items-center">
-                                                                        {d}
-                                                                        <button onClick={() => toggleFixedHoliday(d)} className="ml-1 text-red-400">×</button>
-                                                                    </span>
-                                                                ))
-                                                            }
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            {/* Lunar Holidays */}
-                                            <div className="bg-slate-800 p-5 rounded-xl border border-slate-700 relative overflow-hidden">
-                                                <div className="absolute top-0 right-0 w-20 h-20 bg-red-600/10 rounded-bl-full -mr-4 -mt-4"></div>
-                                                <h4 className="font-bold text-white mb-4 border-b border-slate-700 pb-2">農曆節日 (自動換算)</h4>
-                                                <div className="space-y-3">
-                                                    {[
-                                                        { key: 'CNY_EVE', label: '除夕', desc: '農曆十二月三十' },
-                                                        { key: 'CNY', label: '春節 (初一)', desc: '農曆正月初一' },
-                                                        { key: 'CHINESE_VALENTINES', label: '七夕情人節', desc: '農曆七月初七' },
-                                                    ].map(item => (
-                                                        <label key={item.key} className="flex items-center space-x-3 cursor-pointer p-2 hover:bg-slate-700 rounded transition-colors group">
-                                                            <input 
-                                                                type="checkbox" 
-                                                                checked={vendorData!.decoratorSettings?.lunarHolidays.includes(item.key)}
-                                                                onChange={() => toggleLunarHoliday(item.key)}
-                                                                className="w-5 h-5 rounded border-slate-500 bg-slate-900 text-red-500 focus:ring-red-500"
-                                                            />
-                                                            <div>
-                                                                <div className="text-slate-200 font-bold group-hover:text-red-400 transition-colors">{item.label}</div>
-                                                                <div className="text-xs text-slate-500">{item.desc}</div>
-                                                            </div>
-                                                        </label>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                       </div>
-                                       
-                                       <div className="bg-slate-800 p-4 rounded-lg flex items-center justify-between border border-slate-700">
-                                           <span className="text-slate-300 font-bold">特殊節日加價百分比 (%)</span>
-                                           <div className="flex items-center">
-                                               <span className="mr-2 text-slate-500">加收</span>
-                                               <input 
-                                                    type="number" 
-                                                    value={vendorData!.decoratorSettings?.holidaySurchargePercent} 
-                                                    onChange={e => handleProfileUpdate('decoratorSettings', { ...vendorData!.decoratorSettings, holidaySurchargePercent: parseInt(e.target.value) })}
-                                                    className="w-20 bg-slate-900 border-slate-600 rounded px-2 py-1 text-center font-bold text-orange-400"
-                                               />
-                                               <span className="ml-2 text-slate-500">%</span>
-                                           </div>
-                                       </div>
-                                   </div>
-                               )}
-                           </div>
-                           
-                           <div className="p-4 border-t border-slate-800 bg-slate-900 flex justify-end">
-                               <button onClick={() => setIsDecorSettingsModalOpen(false)} className="bg-green-600 hover:bg-green-500 text-white px-8 py-3 rounded-lg font-bold shadow-lg">確認儲存</button>
-                           </div>
-                       </div>
-                   </div>
-               )}
-
-               {editingDate && (
-                   <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-                       <div className="bg-slate-900 rounded-xl p-6 w-full max-w-2xl border border-slate-700 shadow-2xl animate-fade-in-up">
-                           <div className="flex justify-between items-center mb-6">
-                               <h3 className="text-xl font-bold text-white">編輯時段: {editingDate}</h3>
-                               <button onClick={() => setEditingDate(null)} className="text-slate-400 hover:text-white text-xl">✕</button>
-                           </div>
-                           
-                           <div className="grid grid-cols-4 sm:grid-cols-6 gap-3 mb-6">
-                               {HOURS.map(h => {
-                                   const isSelected = vendorData!.availableHours[editingDate] && vendorData!.availableHours[editingDate].includes(h);
-                                   const hNum = parseInt(h);
-                                   const isSpecial = hNum < 8 || hNum > 21; // 0-8 & 21-23
-
-                                   return (
-                                       <button 
-                                        key={h}
-                                        onClick={() => handleHourToggle(editingDate, h)}
-                                        className={`py-2 rounded text-sm font-medium border transition-all ${
-                                            isSelected 
-                                            ? (isSpecial ? 'bg-orange-600 border-orange-500 text-white shadow-[0_0_10px_rgba(234,88,12,0.5)]' : 'bg-indigo-600 border-indigo-500 text-white shadow')
-                                            : 'bg-slate-800 border-slate-700 text-slate-500 hover:bg-slate-700'
-                                        }`}
-                                       >
-                                           {h}
-                                       </button>
-                                   )
-                               })}
-                           </div>
-
-                           <div className="flex justify-between border-t border-slate-800 pt-4">
-                               <div className="flex gap-2">
-                                   <button 
-                                     onClick={() => handleProfileUpdate('availableHours', { ...vendorData!.availableHours, [editingDate]: [...HOURS] })}
-                                     className="text-xs px-3 py-1 bg-slate-800 text-indigo-400 rounded hover:bg-slate-700"
-                                   >
-                                       全選
-                                   </button>
-                                   <button 
-                                     onClick={() => handleProfileUpdate('availableHours', { ...vendorData!.availableHours, [editingDate]: [] })}
-                                     className="text-xs px-3 py-1 bg-slate-800 text-slate-400 rounded hover:bg-slate-700"
-                                   >
-                                       全取消
-                                   </button>
-                               </div>
-                               <button onClick={() => setEditingDate(null)} className="bg-green-600 hover:bg-green-500 text-white px-6 py-2 rounded font-bold shadow-lg">完成</button>
-                           </div>
-                       </div>
-                   </div>
-               )}
+               <input type="file" ref={profileImageInputRef} onChange={handleProfileImageChange} accept="image/*" className="hidden" />
            </div>
-      );
-  }
+           
+           <div className="flex-1">
+             <input 
+               type="text" 
+               value={vendorData!.name} 
+               onChange={(e) => setVendorData({ ...vendorData!, name: e.target.value })}
+               className="text-3xl font-black text-white mb-1 bg-transparent border-b border-transparent hover:border-white/30 focus:border-primary outline-none w-full transition-all"
+             />
+             
+             <div className="flex items-center gap-4 mt-2">
+               <div className="relative group">
+                   <select
+                       value={vendorData!.category}
+                       onChange={(e) => setVendorData({ ...vendorData!, category: e.target.value as ServiceCategory })}
+                       className="appearance-none bg-transparent border-b border-primary/30 text-[10px] font-black text-primary uppercase tracking-widest outline-none focus:border-primary py-1 pr-6 cursor-pointer hover:border-primary transition-colors"
+                   >
+                       {Object.values(ServiceCategory).map((cat) => (
+                           <option key={cat} value={cat} className="bg-zinc-900 text-white font-bold">
+                               {cat}
+                           </option>
+                       ))}
+                   </select>
+                   <div className="absolute right-0 top-1/2 -translate-y-1/2 pointer-events-none text-primary">▼</div>
+               </div>
+               
+               <div className="h-4 w-[1px] bg-white/10 mx-2"></div>
+               
+               <div className="flex items-center gap-2">
+                   <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+                   <span className="text-[10px] text-green-500 font-bold uppercase tracking-widest">營運中</span>
+               </div>
+             </div>
+           </div>
+        </div>
+        
+        <div className="flex gap-4">
+             <button 
+                 onClick={handleSave}
+                 className="px-8 py-4 bg-primary text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-lg shadow-primary/20 hover:bg-[#d9520e] transition-all"
+             >
+                 儲存變更
+             </button>
+             <button 
+                 onClick={() => { setVendorData(null); setCurrentStep('LOGIN'); }}
+                 className="px-8 py-4 border border-white/10 text-slate-500 hover:text-white rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-white/5 transition-all"
+             >
+                 登出
+             </button>
+        </div>
+      </div>
 
-  return (
-    <div className="min-h-screen bg-slate-950">
-      {currentStep === 'SELECT_TYPE' && (
-          <div className="max-w-6xl mx-auto mt-10 p-6">
-              <h2 className="text-4xl font-black text-center text-slate-100 mb-12"><span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400">合作夥伴</span> 入口</h2>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  {VENDOR_TYPES.map((mainType, idx) => (
-                      <div key={idx} className="bg-slate-900/50 rounded-3xl border border-slate-800 p-6 backdrop-blur">
-                          <div className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${mainType.color} flex items-center justify-center text-white shadow-lg mb-6`}>
-                             {mainType.icon}
-                          </div>
-                          <h3 className="text-2xl font-bold text-white mb-6">{mainType.label}</h3>
-                          
-                          <div className="grid grid-cols-2 gap-3">
-                              {mainType.subcategories.map(sub => (
+      <div className="flex space-x-2 md:space-x-4 mb-10 overflow-x-auto pb-2 no-scrollbar">
+        {VENDOR_TABS.map(tab => (
+            <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`px-6 md:px-8 py-4 rounded-2xl font-black text-sm md:text-base uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === tab.id ? 'bg-white text-black shadow-xl scale-105' : 'bg-white/5 text-slate-500 hover:bg-white/10'}`}
+            >
+                {tab.label}
+            </button>
+        ))}
+      </div>
+
+      <div className="min-h-[500px]">
+          {activeTab === 'ORDERS' && (
+              <div className="space-y-6 animate-fade-in">
+                  {MOCK_ORDERS.filter(o => o.selections.some(s => s.vendorId === vendorData!.id)).length === 0 ? (
+                      <div className="text-center py-20 border-2 border-dashed border-white/10 rounded-3xl">
+                          <p className="text-slate-500 font-bold">目前沒有訂單</p>
+                      </div>
+                  ) : (
+                      MOCK_ORDERS.filter(o => o.selections.some(s => s.vendorId === vendorData!.id)).map(order => {
+                          const selection = order.selections.find(s => s.vendorId === vendorData!.id);
+                          return (
+                              <div key={order.id} className="bg-white/5 p-6 rounded-3xl border border-white/5 hover:border-white/20 transition-all flex justify-between items-center group">
+                                  <div>
+                                      <div className="flex items-center gap-3 mb-2">
+                                          <span className={`px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-widest ${selection?.status === 'ACCEPTED' ? 'bg-green-500/20 text-green-500' : 'bg-yellow-500/20 text-yellow-500'}`}>
+                                              {selection?.status === 'ACCEPTED' ? '已接單' : '待確認'}
+                                          </span>
+                                          <span className="text-slate-500 text-xs font-bold">{order.id}</span>
+                                          <span className="text-slate-500 text-xs font-bold">• {order.createdAt.split('T')[0]}</span>
+                                      </div>
+                                      <div className="text-white font-bold text-lg">{order.userRequest.name} - {order.userRequest.eventType}</div>
+                                      <div className="text-slate-400 text-sm mt-1">{order.userRequest.date} ({order.userRequest.startTime}-{order.userRequest.endTime}) @ {order.userRequest.city}</div>
+                                  </div>
                                   <button 
-                                    key={sub.id}
-                                    onClick={() => handleCategorySelect(sub.id)}
-                                    className="text-left px-4 py-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-indigo-500 rounded-xl transition-all text-slate-300 hover:text-white text-sm font-medium"
+                                      onClick={() => setSelectedOrderForDetail(order)}
+                                      className="px-6 py-3 bg-white/5 group-hover:bg-white/10 text-white rounded-xl font-bold text-xs uppercase tracking-widest transition-all"
                                   >
-                                      {sub.label}
+                                      查看詳情
                                   </button>
+                              </div>
+                          );
+                      })
+                  )}
+              </div>
+          )}
+
+          {activeTab === 'PACKAGES' && (
+              <div className="animate-fade-in">
+                  {isEditingPackage ? (
+                      renderPackageEditor()
+                  ) : (
+                      <div className="space-y-8">
+                          <div className="flex justify-between items-center">
+                              <h3 className="text-xl font-black text-white">方案列表</h3>
+                              <button 
+                                  onClick={() => {
+                                      setEditingPackage({
+                                          name: '',
+                                          price: 0,
+                                          soldCount: 0,
+                                          description: '',
+                                          imageUrls: ['https://picsum.photos/id/1025/800/600'],
+                                          includedItems: [],
+                                          eventTypes: []
+                                      });
+                                      setIsEditingPackage(true);
+                                  }}
+                                  className="px-6 py-3 bg-primary text-white rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-[#d9520e]"
+                              >
+                                  + 新增方案
+                              </button>
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                              {vendorData!.packages.map(pkg => (
+                                  <div key={pkg.id} className="bg-white/5 border border-white/5 rounded-3xl overflow-hidden group hover:border-white/20 transition-all">
+                                      <div className="h-48 overflow-hidden relative">
+                                          <img src={pkg.imageUrls[0]} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
+                                          <div className="absolute top-4 right-4 bg-black/60 px-3 py-1 rounded-full text-xs text-white font-bold backdrop-blur-md">
+                                              ${pkg.price.toLocaleString()}
+                                          </div>
+                                      </div>
+                                      <div className="p-6">
+                                          <div className="flex justify-between items-start mb-4">
+                                              <h4 className="text-lg font-bold text-white">{pkg.name}</h4>
+                                              <span className="text-xs text-slate-500 font-bold">售出 {pkg.soldCount || 0}</span>
+                                          </div>
+                                          <p className="text-slate-400 text-sm line-clamp-2 mb-6">{pkg.description}</p>
+                                          <button 
+                                              onClick={() => {
+                                                  setEditingPackage(pkg);
+                                                  setIsEditingPackage(true);
+                                              }}
+                                              className="w-full py-3 bg-white/5 hover:bg-white/10 text-white rounded-xl font-bold text-xs uppercase tracking-widest transition-all"
+                                          >
+                                              編輯方案
+                                          </button>
+                                      </div>
+                                  </div>
                               ))}
                           </div>
                       </div>
-                  ))}
-              </div>
-
-              <button onClick={onBack} className="mt-12 block mx-auto text-slate-500 hover:text-white">← 返回平台首頁</button>
-          </div>
-      )}
-      
-      {currentStep === 'LOGIN' && (
-           <div className="min-h-screen flex flex-col justify-center items-center p-4">
-              <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-2xl">
-                  <h2 className="text-2xl font-bold text-white text-center mb-8">後台登入</h2>
-                  {selectedCategory && (
-                      <div className="text-center mb-6">
-                          <span className="bg-indigo-900 text-indigo-300 text-xs px-3 py-1 rounded-full border border-indigo-700">
-                              {selectedCategory}
-                          </span>
-                      </div>
                   )}
-                  <div className="space-y-4">
-                      <input type="text" placeholder="Email" value={loginId} onChange={e => setLoginId(e.target.value)} className="w-full bg-slate-800 border-slate-700 text-white p-3 rounded"/>
-                      <input type="password" placeholder="Password" value={loginPwd} onChange={e => setLoginPwd(e.target.value)} className="w-full bg-slate-800 border-slate-700 text-white p-3 rounded"/>
-                      <button onClick={() => handleLogin()} className="w-full bg-indigo-600 text-white py-3 rounded font-bold">登入</button>
-                  </div>
-                  <div className="mt-8 border-t border-slate-800 pt-4">
-                      <p className="text-xs text-slate-500 mb-2 text-center">測試帳號 (僅顯示同類別)：</p>
-                      {MOCK_VENDORS.filter(v => v.category === selectedCategory).map(v => (
-                          <button key={v.id} onClick={() => handleLogin(v.id)} className="block w-full text-left text-xs text-indigo-400 hover:text-indigo-300 py-1">{v.name} ({v.id})</button>
-                      ))}
-                      {MOCK_VENDORS.filter(v => v.category === selectedCategory).length === 0 && (
-                          <p className="text-xs text-slate-600 text-center">無此類別測試帳號</p>
-                      )}
-                  </div>
-                  <button onClick={() => setCurrentStep('SELECT_TYPE')} className="mt-4 w-full text-center text-slate-500 text-sm">取消</button>
               </div>
-           </div>
-      )}
+          )}
 
-      {currentStep === 'DASHBOARD' && renderDashboard()}
+          {activeTab === 'SCHEDULE' && renderScheduleTab()}
+          
+          {activeTab === 'FEES' && renderFeesTab()}
+          
+          {activeTab === 'PROFILE' && renderProfileTab()}
+      </div>
     </div>
+  );
+
+  if (currentStep === 'CATEGORY_SELECT') return renderCategorySelect();
+  if (currentStep === 'LOGIN') return renderLogin();
+  
+  return (
+      <div className="min-h-screen bg-black text-white font-sans selection:bg-primary selection:text-white pb-20">
+          <button 
+              onClick={onBack} 
+              className="fixed bottom-10 left-10 text-slate-500 hover:text-white text-xs font-black uppercase tracking-[0.2em] transition-all flex items-center gap-3 z-50 bg-black/50 px-6 py-3 rounded-full border border-white/5 backdrop-blur-md hover:border-white/20"
+          >
+              <span>←</span> 回首頁
+          </button>
+          
+          {renderDashboard()}
+      </div>
   );
 };
 
