@@ -212,7 +212,7 @@ const BASE_VENDORS: Vendor[] = [
     name: '迪爾氣球設計 (D.Design)',
     category: ServiceCategory.DECOR,
     description: '質感氣球佈置、派對主題規劃。為您打造獨一無二的夢幻場景。從小型生日派對到大型企業活動皆可客製。',
-    imageUrl: 'https://cdn-icons-png.flaticon.com/512/9384/9384168.png', 
+    imageUrl: 'https://i.duk.tw/u0BpfL.png', 
     portfolio: ['https://picsum.photos/id/10/300/200', 'https://picsum.photos/id/11/300/200', 'https://picsum.photos/id/12/300/200'],
     portfolioVideos: ['https://www.w3schools.com/html/mov_bbb.mp4'],
     websiteUrl: 'https://www.dear79.shop/',
@@ -220,7 +220,21 @@ const BASE_VENDORS: Vendor[] = [
     rateType: 'package',
     travelFees: {},
     packages: [
-      { id: 'p1', name: '夢幻生日派對 A 方案', description: '包含 2 米氣球拱門、空飄氣球 20 顆、壽星名牌。色系可選（粉/藍/金）。', price: 8800, soldCount: 1520, imageUrls: ['https://picsum.photos/id/10/300/200'], eventTypes: [EventType.BIRTHDAY], includedItems: [{id:'b1', name:'氣球拱門', quantity: 1, imageUrl:'https://picsum.photos/id/10/300/200'}, {id:'b2', name:'空飄氣球', quantity: 20, imageUrl:'https://picsum.photos/id/11/300/200'}] },
+      { 
+        id: 'p1', 
+        name: '純粹之境生日方案', 
+        description: '適合想要打造獨特藝術品味的客戶，獨特的氣球雲團意境\n讓你的空間瞬間變的超夢幻，此方案不適合天花板超過350公分的挑高空間\n雲團氣球的飄浮時效為8小時請留意', 
+        price: 27999, 
+        soldCount: 69, 
+        imageUrls: ['https://duk.tw/DlBRv1.jpg'], 
+        eventTypes: [EventType.BIRTHDAY], 
+        includedItems: [
+            {id:'b1', name:'圓形銀色鏡面立體球空飄', quantity: 7, imageUrl:'https://duk.tw/JNTYjT.jpg'}, 
+            {id:'b2', name:'18吋銀色五角星空飄', quantity: 7, imageUrl:'https://i.duk.tw/XG7uiY.jpg'},
+            {id:'b3', name:'天花板仿雲團空飄球', quantity: 8, imageUrl:'https://duk.tw/HvUERK.jpg'},
+            {id:'b4', name:'精緻立體黑灰雙色大愛心', quantity: 1, imageUrl:'https://duk.tw/BLhdlg.jpg'}
+        ] 
+      },
       { id: 'p2', name: '奢華求婚佈置 B 方案', description: '包含 MARRY ME 燈飾、鮮花花瓣、電子蠟燭 50 個、氣球束 6 組。營造最浪漫的氛圍。', price: 15800, soldCount: 420, imageUrls: ['https://picsum.photos/id/20/300/200'], eventTypes: [EventType.PROPOSAL], includedItems: [{id:'m1', name:'MARRY ME 燈飾', quantity: 1, imageUrl:'https://picsum.photos/id/20/300/200'}, {id:'m2', name:'電子蠟燭', quantity: 50, imageUrl:'https://picsum.photos/id/30/300/200'}] },
       { id: 'p3', name: '後車廂驚喜佈置', description: '適合告白、週年紀念、生日驚喜。包含燈串、造型氣球、掛旗。', price: 5500, soldCount: 2800, imageUrls: ['https://picsum.photos/id/30/300/200'], eventTypes: [EventType.TRUNK_DECOR, EventType.BIRTHDAY, EventType.ANNIVERSARY], includedItems: [] }
     ],

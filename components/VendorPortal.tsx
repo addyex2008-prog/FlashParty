@@ -414,7 +414,7 @@ const VendorPortal: React.FC<VendorPortalProps> = ({ onBack }) => {
   };
 
   const renderCategorySelect = () => (
-    <div className="max-w-4xl mx-auto pt-20 px-6 animate-fade-in relative z-10 pb-48">
+    <div className="max-w-4xl mx-auto pt-20 px-4 md:px-6 animate-fade-in relative z-10 pb-48">
       <div className="text-center mb-10">
         <h2 className="text-3xl md:text-5xl font-black text-white mb-4 tracking-tighter">我是供應商夥伴</h2>
         <p className="text-slate-500 font-bold uppercase tracking-widest text-xs md:text-sm">請選擇您的服務類別以進行登入或註冊</p>
@@ -437,7 +437,7 @@ const VendorPortal: React.FC<VendorPortalProps> = ({ onBack }) => {
                   <div className={`transition-colors ${selectedCats.includes(cat) ? 'text-white' : 'text-slate-600 group-hover:text-primary'}`}>
                     {CATEGORY_ICONS[cat] || <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M12 4v16m8-8H4" /></svg>}
                   </div>
-                  <span className="font-black text-[10px] md:text-sm tracking-widest uppercase text-center">
+                  <span className="font-black text-xs md:text-base tracking-widest uppercase text-center break-words w-full">
                     {cat}
                   </span>
                 </button>
@@ -459,8 +459,8 @@ const VendorPortal: React.FC<VendorPortalProps> = ({ onBack }) => {
   );
 
   const renderLogin = () => (
-    <div className="max-w-md mx-auto pt-32 px-6 animate-fade-in text-center relative z-10 pb-48">
-      <div className="glass-card p-8 md:p-12 rounded-[48px] border border-white/10 shadow-2xl">
+    <div className="max-w-md mx-auto pt-32 px-4 md:px-6 animate-fade-in text-center relative z-10 pb-48">
+      <div className="glass-card p-6 md:p-12 rounded-[48px] border border-white/10 shadow-2xl">
         <h2 className="text-2xl md:text-3xl font-black text-white mb-8 tracking-tight">合作夥伴登入</h2>
         <div className="space-y-6">
           <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mb-8">請選擇一個測試帳號登入系統</p>
@@ -468,12 +468,12 @@ const VendorPortal: React.FC<VendorPortalProps> = ({ onBack }) => {
             <button
               key={vendor.id}
               onClick={() => handleLogin(vendor.id)}
-              className="w-full p-4 md:p-6 rounded-2xl bg-white/5 border border-white/10 flex items-center gap-4 hover:border-primary/50 transition-all group"
+              className="w-full p-4 md:p-6 rounded-2xl bg-white/5 border border-white/10 flex items-center gap-4 hover:border-primary/50 transition-all group overflow-hidden"
             >
-              <img src={vendor.imageUrl} className="w-12 h-12 md:w-16 md:h-16 rounded-xl object-cover" />
-              <div className="text-left">
-                <div className="text-white font-black text-base md:text-lg group-hover:text-primary transition-colors">{vendor.name}</div>
-                <div className="text-slate-600 text-xs font-bold uppercase">{vendor.category}</div>
+              <img src={vendor.imageUrl} className="w-12 h-12 md:w-16 md:h-16 rounded-xl object-cover shrink-0" />
+              <div className="text-left min-w-0 flex-1">
+                <div className="text-white font-black text-base md:text-lg group-hover:text-primary transition-colors truncate">{vendor.name}</div>
+                <div className="text-slate-600 text-xs font-bold uppercase truncate">{vendor.category}</div>
               </div>
             </button>
           ))}
@@ -521,12 +521,12 @@ const VendorPortal: React.FC<VendorPortalProps> = ({ onBack }) => {
                     <div className="bg-white/5 p-4 rounded-2xl">
                         <span className="text-xs text-slate-500 font-bold block mb-1">活動資訊</span>
                         <div className="text-white font-bold">{selectedOrderForDetail.userRequest.date} ({selectedOrderForDetail.userRequest.startTime} - {selectedOrderForDetail.userRequest.endTime})</div>
-                        <div className="text-slate-400 text-sm mt-1">{selectedOrderForDetail.userRequest.city}{selectedOrderForDetail.userRequest.district} {selectedOrderForDetail.userRequest.venueName}</div>
-                        <div className="text-slate-500 text-xs mt-1">{selectedOrderForDetail.userRequest.address}</div>
+                        <div className="text-slate-400 text-sm mt-1 break-words">{selectedOrderForDetail.userRequest.city}{selectedOrderForDetail.userRequest.district} {selectedOrderForDetail.userRequest.venueName}</div>
+                        <div className="text-slate-500 text-xs mt-1 break-words">{selectedOrderForDetail.userRequest.address}</div>
                     </div>
                     <div className="bg-white/5 p-4 rounded-2xl border border-primary/20">
                         <span className="text-xs text-slate-500 font-bold block mb-1">您的服務項目</span>
-                        <div className="text-white font-bold text-lg">{pkg?.name || '基本服務'}</div>
+                        <div className="text-white font-bold text-lg break-words">{pkg?.name || '基本服務'}</div>
                         {selection?.options?.deliveryMethod && <div className="text-primary text-sm font-bold mt-1">方式: {selection.options.deliveryMethod === 'setup' ? '專人佈置' : (selection.options.deliveryMethod === 'delivery' ? '外送' : '自取')}</div>}
                         {selection?.options?.pickupTime && <div className="text-slate-400 text-sm font-bold">預計時間: {selection.options.pickupTime}</div>}
                         
@@ -874,12 +874,12 @@ const VendorPortal: React.FC<VendorPortalProps> = ({ onBack }) => {
                                 <table className="w-full text-left border-collapse">
                                     <thead>
                                         <tr className="border-b border-white/10 text-xs text-slate-500 uppercase">
-                                            <th className="py-3 px-4">縣市</th>
-                                            <th className="py-3 px-4">區域</th>
-                                            <th className="py-3 px-4">低消</th>
-                                            <th className="py-3 px-4">佈置費</th>
-                                            <th className="py-3 px-4">撤場費</th>
-                                            <th className="py-3 px-4">操作</th>
+                                            <th className="py-3 px-4 whitespace-nowrap">縣市</th>
+                                            <th className="py-3 px-4 whitespace-nowrap">區域</th>
+                                            <th className="py-3 px-4 whitespace-nowrap">低消</th>
+                                            <th className="py-3 px-4 whitespace-nowrap">佈置費</th>
+                                            <th className="py-3 px-4 whitespace-nowrap">撤場費</th>
+                                            <th className="py-3 px-4 whitespace-nowrap">操作</th>
                                         </tr>
                                     </thead>
                                     <tbody className="text-sm">
@@ -901,13 +901,13 @@ const VendorPortal: React.FC<VendorPortalProps> = ({ onBack }) => {
                                                 <select 
                                                     value={newLocationRule.city}
                                                     onChange={e => setNewLocationRule({...newLocationRule, city: e.target.value})}
-                                                    className="bg-black/30 border border-white/10 rounded px-2 py-1 text-white w-full"
+                                                    className="bg-black/30 border border-white/10 rounded px-2 py-1 text-white w-full min-w-[80px]"
                                                 >
                                                     {Object.keys(TAIWAN_LOCATIONS).map(c => <option key={c} value={c}>{c}</option>)}
                                                 </select>
                                             </td>
                                             <td className="p-2">
-                                                <input type="text" disabled value="all" className="bg-transparent text-slate-500 w-full text-center" />
+                                                <input type="text" disabled value="all" className="bg-transparent text-slate-500 w-full text-center min-w-[60px]" />
                                             </td>
                                             <td className="p-2"><input type="number" value={newLocationRule.minSpend} onChange={e => setNewLocationRule({...newLocationRule, minSpend: parseInt(e.target.value)})} className="bg-black/30 border border-white/10 rounded px-2 py-1 text-white w-20" /></td>
                                             <td className="p-2"><input type="number" value={newLocationRule.setupFee} onChange={e => setNewLocationRule({...newLocationRule, setupFee: parseInt(e.target.value)})} className="bg-black/30 border border-white/10 rounded px-2 py-1 text-white w-20" /></td>
@@ -939,12 +939,12 @@ const VendorPortal: React.FC<VendorPortalProps> = ({ onBack }) => {
                                  </div>
                                  <div className="bg-white/5 p-4 rounded-xl border border-white/10 space-y-3">
                                      <div className="flex gap-2">
-                                        <input type="date" value={newSpecialDate.date} onChange={e => setNewSpecialDate({...newSpecialDate, date: e.target.value})} className="bg-black/30 border border-white/10 rounded px-3 py-2 text-white flex-1" />
+                                        <input type="date" value={newSpecialDate.date} onChange={e => setNewSpecialDate({...newSpecialDate, date: e.target.value})} className="bg-black/30 border border-white/10 rounded px-3 py-2 text-white flex-1 min-w-0" />
                                         <input type="number" step="0.1" value={newSpecialDate.multiplier} onChange={e => setNewSpecialDate({...newSpecialDate, multiplier: parseFloat(e.target.value)})} className="bg-black/30 border border-white/10 rounded px-3 py-2 text-white w-20" placeholder="倍率" />
                                      </div>
                                      <div className="flex gap-2">
-                                        <input type="text" value={newSpecialDate.note} onChange={e => setNewSpecialDate({...newSpecialDate, note: e.target.value})} className="bg-black/30 border border-white/10 rounded px-3 py-2 text-white flex-1" placeholder="節日備註 (例: 情人節)" />
-                                        <button onClick={addSpecialDateRule} className="bg-primary text-white px-4 rounded font-bold">新增</button>
+                                        <input type="text" value={newSpecialDate.note} onChange={e => setNewSpecialDate({...newSpecialDate, note: e.target.value})} className="bg-black/30 border border-white/10 rounded px-3 py-2 text-white flex-1 min-w-0" placeholder="節日備註" />
+                                        <button onClick={addSpecialDateRule} className="bg-primary text-white px-4 rounded font-bold shrink-0">新增</button>
                                      </div>
                                  </div>
                              </div>
@@ -1059,11 +1059,11 @@ const VendorPortal: React.FC<VendorPortalProps> = ({ onBack }) => {
   };
 
   const renderDashboard = () => (
-    <div className="max-w-7xl mx-auto pt-20 px-6 animate-fade-in relative z-10 pb-48">
+    <div className="max-w-7xl mx-auto pt-20 px-4 md:px-6 animate-fade-in relative z-10 pb-48">
       {showSaveToast && <Toast message="已儲存變更" onClose={() => setShowSaveToast(false)} />}
       {selectedOrderForDetail && renderOrderDetailModal()}
       
-      <div className="flex flex-col md:flex-row justify-between items-center mb-16 glass-card p-10 rounded-[56px] border border-white/10 shadow-2xl">
+      <div className="flex flex-col md:flex-row justify-between items-center mb-16 glass-card p-6 md:p-10 rounded-[56px] border border-white/10 shadow-2xl">
         <div className="flex items-center gap-8 w-full md:w-auto">
            <div className="relative group w-24 h-24 shrink-0">
                <div 
@@ -1078,16 +1078,16 @@ const VendorPortal: React.FC<VendorPortalProps> = ({ onBack }) => {
                <input type="file" ref={profileImageInputRef} onChange={handleProfileImageChange} accept="image/*" className="hidden" />
            </div>
            
-           <div className="flex-1">
+           <div className="flex-1 min-w-0">
              <input 
                type="text" 
                value={vendorData!.name} 
                onChange={(e) => setVendorData({ ...vendorData!, name: e.target.value })}
-               className="text-3xl font-black text-white mb-1 bg-transparent border-b border-transparent hover:border-white/30 focus:border-primary outline-none w-full transition-all"
+               className="text-2xl md:text-3xl font-black text-white mb-1 bg-transparent border-b border-transparent hover:border-white/30 focus:border-primary outline-none w-full transition-all truncate"
              />
              
              <div className="flex items-center gap-4 mt-2">
-               <div className="relative group">
+               <div className="relative group shrink-0">
                    <select
                        value={vendorData!.category}
                        onChange={(e) => setVendorData({ ...vendorData!, category: e.target.value as ServiceCategory })}
@@ -1104,7 +1104,7 @@ const VendorPortal: React.FC<VendorPortalProps> = ({ onBack }) => {
                
                <div className="h-4 w-[1px] bg-white/10 mx-2"></div>
                
-               <div className="flex items-center gap-2">
+               <div className="flex items-center gap-2 shrink-0">
                    <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
                    <span className="text-[10px] text-green-500 font-bold uppercase tracking-widest">營運中</span>
                </div>
@@ -1112,16 +1112,16 @@ const VendorPortal: React.FC<VendorPortalProps> = ({ onBack }) => {
            </div>
         </div>
         
-        <div className="flex gap-4">
+        <div className="flex gap-4 mt-6 md:mt-0 w-full md:w-auto">
              <button 
                  onClick={handleSave}
-                 className="px-8 py-4 bg-primary text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-lg shadow-primary/20 hover:bg-[#d9520e] transition-all"
+                 className="flex-1 md:flex-initial px-8 py-4 bg-primary text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-lg shadow-primary/20 hover:bg-[#d9520e] transition-all whitespace-nowrap"
              >
                  儲存變更
              </button>
              <button 
                  onClick={() => { setVendorData(null); setCurrentStep('LOGIN'); }}
-                 className="px-8 py-4 border border-white/10 text-slate-500 hover:text-white rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-white/5 transition-all"
+                 className="flex-1 md:flex-initial px-8 py-4 border border-white/10 text-slate-500 hover:text-white rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-white/5 transition-all whitespace-nowrap"
              >
                  登出
              </button>
@@ -1151,8 +1151,8 @@ const VendorPortal: React.FC<VendorPortalProps> = ({ onBack }) => {
                       MOCK_ORDERS.filter(o => o.selections.some(s => s.vendorId === vendorData!.id)).map(order => {
                           const selection = order.selections.find(s => s.vendorId === vendorData!.id);
                           return (
-                              <div key={order.id} className="bg-white/5 p-6 rounded-3xl border border-white/5 hover:border-white/20 transition-all flex justify-between items-center group">
-                                  <div>
+                              <div key={order.id} className="bg-white/5 p-6 rounded-3xl border border-white/5 hover:border-white/20 transition-all flex flex-col md:flex-row justify-between items-center group gap-6">
+                                  <div className="w-full">
                                       <div className="flex items-center gap-3 mb-2">
                                           <span className={`px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-widest ${selection?.status === 'ACCEPTED' ? 'bg-green-500/20 text-green-500' : 'bg-yellow-500/20 text-yellow-500'}`}>
                                               {selection?.status === 'ACCEPTED' ? '已接單' : '待確認'}
@@ -1161,11 +1161,11 @@ const VendorPortal: React.FC<VendorPortalProps> = ({ onBack }) => {
                                           <span className="text-slate-500 text-xs font-bold">• {order.createdAt.split('T')[0]}</span>
                                       </div>
                                       <div className="text-white font-bold text-lg">{order.userRequest.name} - {order.userRequest.eventType}</div>
-                                      <div className="text-slate-400 text-sm mt-1">{order.userRequest.date} ({order.userRequest.startTime}-{order.userRequest.endTime}) @ {order.userRequest.city}</div>
+                                      <div className="text-slate-400 text-sm mt-1 break-words">{order.userRequest.date} ({order.userRequest.startTime}-{order.userRequest.endTime}) @ {order.userRequest.city}</div>
                                   </div>
                                   <button 
                                       onClick={() => setSelectedOrderForDetail(order)}
-                                      className="px-6 py-3 bg-white/5 group-hover:bg-white/10 text-white rounded-xl font-bold text-xs uppercase tracking-widest transition-all"
+                                      className="w-full md:w-auto px-6 py-3 bg-white/5 group-hover:bg-white/10 text-white rounded-xl font-bold text-xs uppercase tracking-widest transition-all shrink-0"
                                   >
                                       查看詳情
                                   </button>
@@ -1244,19 +1244,18 @@ const VendorPortal: React.FC<VendorPortalProps> = ({ onBack }) => {
     </div>
   );
 
-  if (currentStep === 'CATEGORY_SELECT') return renderCategorySelect();
-  if (currentStep === 'LOGIN') return renderLogin();
-  
   return (
-      <div className="min-h-screen bg-black text-white font-sans selection:bg-primary selection:text-white pb-20">
+      <div className="min-h-screen bg-black text-white font-sans selection:bg-primary selection:text-white pb-20 relative">
           <button 
               onClick={onBack} 
-              className="fixed bottom-10 left-10 text-slate-500 hover:text-white text-xs font-black uppercase tracking-[0.2em] transition-all flex items-center gap-3 z-50 bg-black/50 px-6 py-3 rounded-full border border-white/5 backdrop-blur-md hover:border-white/20"
+              className="fixed bottom-6 left-6 text-slate-500 hover:text-white text-xs font-black uppercase tracking-[0.2em] transition-all flex items-center gap-3 z-50 bg-black/50 px-6 py-3 rounded-full border border-white/5 backdrop-blur-md hover:border-white/20"
           >
               <span>←</span> 回首頁
           </button>
           
-          {renderDashboard()}
+          {currentStep === 'CATEGORY_SELECT' && renderCategorySelect()}
+          {currentStep === 'LOGIN' && renderLogin()}
+          {currentStep === 'DASHBOARD' && renderDashboard()}
       </div>
   );
 };

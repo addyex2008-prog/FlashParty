@@ -259,7 +259,7 @@ const ClientWizard: React.FC<ClientWizardProps> = ({ onBack, onGoToMemberCenter 
   const rawTotalPrice = selectedVendors.reduce((sum, selection) => {
     const vendor = MOCK_VENDORS.find(v => v.id === selection.vendorId);
     if (!vendor) return sum;
-    return sum + calculateVendorCost(vendor, request, duration, selection.packageId, selection.options);
+    return calculateVendorCost(vendor, request, duration, selection.packageId, selection.options);
   }, 0);
 
   const finalTotalPrice = appliedDiscount ? Math.round(rawTotalPrice * appliedDiscount.multiplier) : rawTotalPrice;
@@ -636,8 +636,9 @@ const ClientWizard: React.FC<ClientWizardProps> = ({ onBack, onGoToMemberCenter 
           </div>
           
           <div className="space-y-6">
-              <h4 className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center">
-                  <span className="w-2 h-2 bg-primary rounded-full mr-3"></span> 選購服務清單
+              <h4 className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center justify-between">
+                  <span className="flex items-center"><span className="w-2 h-2 bg-primary rounded-full mr-3"></span> 選購服務清單</span>
+                  <span className="text-[10px] text-primary/70 font-bold bg-primary/10 px-2 py-1 rounded">點擊項目可修改方案</span>
               </h4>
               <div className="space-y-4">
                   {selectedVendors.map((sel, idx) => {
@@ -646,7 +647,18 @@ const ClientWizard: React.FC<ClientWizardProps> = ({ onBack, onGoToMemberCenter 
                       const breakdown = calculateVendorCostBreakdown(vendor!, request, duration, sel.packageId, sel.options);
                       
                       return (
-                        <div key={idx} className="bg-white/5 p-6 rounded-3xl border border-white/5 hover:bg-white/10 transition-all">
+                        <div 
+                            key={idx} 
+                            onClick={() => {
+                                if(vendor) setActiveDetailVendor(vendor);
+                            }}
+                            className="bg-white/5 p-6 rounded-3xl border border-white/5 hover:bg-white/10 hover:border-primary/30 transition-all cursor-pointer group relative"
+                        >
+                            <div className="absolute top-6 right-6 text-xs font-bold text-primary opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 bg-black/50 px-3 py-1.5 rounded-full backdrop-blur-sm border border-primary/30 shadow-lg z-10">
+                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                                修改方案
+                            </div>
+
                             <div className="flex items-center gap-6">
                                 <img src={pkg ? pkg.imageUrls[0] : vendor?.imageUrl} className="w-16 h-16 rounded-2xl object-cover border border-white/10" />
                                 <div className="flex-1">
@@ -742,106 +754,85 @@ const ClientWizard: React.FC<ClientWizardProps> = ({ onBack, onGoToMemberCenter 
     </div>
   );
 
-  const renderStep5Success = () => (
-    <div className="text-center py-32 animate-fade-in-up">
-        <div className="w-28 h-28 bg-green-500/20 text-green-500 rounded-[40px] flex items-center justify-center mx-auto mb-12 border border-green-500/30 shadow-[0_0_50px_rgba(34,197,94,0.3)] transform rotate-12">
-            <svg className="w-14 h-14" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
-        </div>
-        <h2 className="text-4xl md:text-5xl font-black text-white mb-8 tracking-tight">媒合委託已送出！</h2>
-        <p className="text-slate-400 mb-20 leading-relaxed px-4 text-lg font-medium">您的需求已正式發送！供應商將收到包含詳細活動圖文的通知。<br className="hidden md:block"/>您可以隨時在會員中心追蹤最新媒合動態。</p>
-        
-        <div className="space-y-6 max-w-sm mx-auto">
-            <button 
-                onClick={onGoToMemberCenter}
-                className="w-full py-6 bg-indigo-600 hover:bg-indigo-500 text-white rounded-3xl font-black transition-all shadow-[0_15px_40px_rgba(79,70,229,0.3)] uppercase tracking-widest text-base"
-            >
-                前往會員中心
-            </button>
-            <button onClick={onBack} className="w-full py-5 bg-white/5 hover:bg-white/10 text-slate-500 rounded-3xl text-sm transition-all font-bold uppercase tracking-widest">回上一頁</button>
-        </div>
-    </div>
-  );
-
   return (
-    <div ref={topRef} className="max-w-4xl mx-auto pb-40 px-4 md:px-6">
-      {toastMessage && <Toast message={toastMessage} onClose={() => setToastMessage(null)} />}
-      
-      {activeDetailVendor && (
-        <VendorDetailModal 
-            vendor={activeDetailVendor} 
-            onClose={() => setActiveDetailVendor(null)} 
-            onSelect={(id, pkgId) => selectVendor(activeDetailVendor.category, id, pkgId)}
+    <div className="max-w-7xl mx-auto pt-24 px-4 md:px-6 relative pb-40">
+       <div ref={topRef}></div>
+       
+       <button 
+         onClick={step === 1 ? onBack : () => setStep(prev => prev - 1)}
+         className="fixed top-6 left-4 md:left-8 z-50 bg-black/60 backdrop-blur-md px-4 py-2 rounded-full border border-white/10 text-slate-400 hover:text-white transition-all text-xs font-black uppercase tracking-widest flex items-center gap-2 hover:border-white/30"
+       >
+         <span>←</span> {step === 1 ? '回首頁' : '上一步'}
+       </button>
+
+       {toastMessage && <Toast message={toastMessage} onClose={() => setToastMessage(null)} />}
+
+       {step === 1 && renderStep1()}
+       {step === 2 && renderStep2()}
+       {step === 3 && renderStep3()}
+       {step === 4 && renderStep4Review()}
+       
+       {step === 5 && (
+           <div className="text-center py-20 animate-fade-in flex flex-col items-center">
+                <div className="w-24 h-24 bg-green-500 rounded-full flex items-center justify-center mb-8 shadow-[0_0_50px_rgba(34,197,94,0.5)]">
+                    <svg className="w-12 h-12 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                </div>
+                <h2 className="text-4xl font-black text-white mb-6">委託需求已送出！</h2>
+                <p className="text-slate-400 text-lg mb-12 font-bold max-w-md">我們已將您的需求發送給相關供應商。<br/>請留意您的會員中心，供應商將在稍後回覆報價。</p>
+                <button 
+                  onClick={onGoToMemberCenter} 
+                  className="px-10 py-4 bg-primary text-white rounded-2xl font-black uppercase tracking-widest shadow-lg hover:scale-105 transition-all"
+                >
+                  前往會員中心
+                </button>
+           </div>
+       )}
+
+       {/* Modals */}
+       <DecorConfigModal 
+          visible={!!pendingDecorSelection}
+          onClose={() => setPendingDecorSelection(null)}
+          onConfirm={handleDecorConfigConfirm}
+          vendor={MOCK_VENDORS.find(v => v.id === pendingDecorSelection?.vendorId) || null}
+          pkg={pendingDecorSelection?.packageId ? MOCK_VENDORS.find(v => v.id === pendingDecorSelection?.vendorId)?.packages?.find(p => p.id === pendingDecorSelection.packageId) || null : null}
+          eventDate={request.date}
+       />
+       
+       {activeDetailVendor && (
+          <VendorDetailModal 
+            vendor={activeDetailVendor}
+            onClose={() => setActiveDetailVendor(null)}
+            onSelect={(vid, pid) => selectVendor(activeDetailVendor.category, vid, pid)}
             userName={request.name}
-            eventType={request.eventType as EventType} // Pass event type for filtering
-        />
-      )}
-
-      {/* Decor Config Modal */}
-      {pendingDecorSelection && (
-          <DecorConfigModal 
-              visible={!!pendingDecorSelection}
-              onClose={() => setPendingDecorSelection(null)}
-              onConfirm={handleDecorConfigConfirm}
-              vendor={MOCK_VENDORS.find(v => v.id === pendingDecorSelection.vendorId) || null}
-              pkg={MOCK_VENDORS.find(v => v.id === pendingDecorSelection.vendorId)?.packages.find(p => p.id === pendingDecorSelection.packageId) || null}
-              eventDate={request.date}
+            eventType={request.eventType as EventType}
           />
-      )}
+       )}
 
-      {step < 5 && (
-        <div className="flex items-center justify-between mb-10 md:mb-16 pt-8 md:pt-12 px-6 md:px-10">
-          {[1, 2, 3, 4].map(i => (
-            <div key={i} className={`flex items-center ${i < 4 ? 'flex-1' : ''}`}>
-              <div className={`w-10 h-10 md:w-12 md:h-12 rounded-full flex items-center justify-center font-black text-sm md:text-base border transition-all duration-500 ${step >= i ? 'bg-primary border-primary text-white shadow-[0_0_20px_rgba(244,96,17,0.5)]' : 'bg-white/5 border-white/10 text-slate-700'}`}>{i}</div>
-              {i < 4 && <div className={`flex-1 h-[3px] mx-2 md:mx-4 rounded-full overflow-hidden bg-white/5`}>
-                  <div className={`h-full bg-primary transition-all duration-700 ${step > i ? 'w-full shadow-[0_0_10px_rgba(244,96,17,1)]' : 'w-0'}`}></div>
-              </div>}
-            </div>
-          ))}
-        </div>
-      )}
+       {renderClientOrderDetailModal()}
 
-      <div className="glass-card rounded-[48px] md:rounded-[64px] p-6 md:p-16 border border-white/5 shadow-2xl relative">
-        <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-transparent via-primary/30 to-transparent rounded-full"></div>
-        {step === 1 && renderStep1()}
-        {step === 2 && renderStep2()}
-        {step === 3 && renderStep3()}
-        {step === 4 && renderStep4Review()}
-        {step === 5 && renderStep5Success()}
-      </div>
-
-      {step < 5 && (
-        <div className="fixed bottom-0 left-0 right-0 bg-black/80 backdrop-blur-3xl border-t border-white/10 p-6 md:p-8 z-50">
-          <div className="max-w-4xl mx-auto flex justify-between items-center px-4">
-            <div className="flex flex-col">
-                <span className="text-[10px] text-slate-500 font-black block uppercase tracking-widest opacity-60 mb-1">估計總花費</span>
-                <span className="text-3xl md:text-4xl font-black text-primary neon-text tracking-tighter leading-none">${finalTotalPrice.toLocaleString()}</span>
-            </div>
-            <div className="flex space-x-4 md:space-x-6 items-center">
-               <button 
-                 onClick={() => {
+       {/* Floating Navigation Bar */}
+       {step < 4 && (
+          <div className="fixed bottom-0 left-0 w-full p-6 bg-gradient-to-t from-black via-black/95 to-transparent z-40 flex justify-center items-end h-32">
+             <button 
+               onClick={() => {
                    if (step === 1) {
-                     onBack();
-                   } else {
-                     setStep(step - 1);
+                       if(validateStep1()) setStep(2);
+                   } else if (step === 2) {
+                       if(neededServices.length === 0) {
+                           setToastMessage("請至少選擇一項服務");
+                           return;
+                       }
+                       setStep(3);
+                   } else if (step === 3) {
+                       setStep(4);
                    }
-                 }} 
-                 className="px-6 md:px-10 py-4 md:py-5 rounded-2xl text-slate-500 font-black hover:text-white transition-all text-xs md:text-sm uppercase tracking-widest"
-               >
-                 回上一頁
-               </button>
-               {step < 4 && (
-                 <button 
-                   onClick={() => { if (step === 1 && !validateStep1()) return; setStep(step + 1) }} 
-                   className="px-8 md:px-14 py-4 md:py-5 rounded-2xl bg-primary text-white font-black text-sm md:text-base uppercase tracking-[0.2em] shadow-xl shadow-primary/20 hover:scale-105 active:scale-95 transition-all"
-                 >
-                   {step === 3 ? '檢視總表' : '下一步'}
-                 </button>
-               )}
-            </div>
+               }}
+               className="w-full max-w-md py-4 bg-white text-black rounded-2xl font-black uppercase tracking-widest shadow-[0_0_30px_rgba(255,255,255,0.3)] hover:scale-105 active:scale-95 transition-all text-lg flex items-center justify-center gap-2"
+             >
+               {step === 3 ? '下一步：確認訂單' : '下一步'} <span className="text-xl">→</span>
+             </button>
           </div>
-        </div>
-      )}
+       )}
     </div>
   );
 };
